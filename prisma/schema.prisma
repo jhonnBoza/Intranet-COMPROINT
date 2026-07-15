@@ -97,6 +97,20 @@ model Auditoria {
   @@index([usuarioId])
 }
 
+// Historial de versiones de un documento (cada reemplazo guarda la anterior).
+model DocumentoVersion {
+  id          String @id @default(cuid())
+  documentoId String
+  version     String
+  storagePath String
+  mime        String
+  tamano      String
+  autor       String
+  fecha       String
+
+  @@index([documentoId])
+}
+
 // Notificaciones por usuario.
 model Notificacion {
   id        String  @id @default(cuid())

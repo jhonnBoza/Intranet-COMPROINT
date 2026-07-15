@@ -215,5 +215,87 @@ export async function eliminarDocumento(
     try { await borrarArchivo(doc.storagePath); } catch { /* si falla el storage, igual borramos el registro */ }
   }
   await prisma.documento.delete({ where: { id } });
+  await prisma.documentoVersion.deleteMany({ where: { documentoId: id } });
   return { nombre: doc.nombre, areaSlug: doc.areaSlug };
+}
+
+// ============================================================
+//  VERSIONADO — cada reemplazo archiva la versión anterior.
+// ============================================================
+
+/** Sube una nueva versión: archiva la actual y sube la nueva. */
+export async function reemplazarArchivo(
+  user: UsuarioPublico,
+  id: string,
+  data: { contenidoBase64: string; mime?: string | null; tamano: string },
+): Promise<Documento> {
+  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as DocConArchivo | undefined;
+  if (!doc) throw new Error("Documento no encontrado.");
+  if (!puedeEditarDocumento(user, doc)) throw new Error("Sin permiso para editar este documento.");
+  if (!data.contenidoBase64) throw new Error("Falta el archivo de la nueva versión.");
+
+  const mime = data.mime || "application/octet-stream";
+
+  // Archiva la versión actual (si tiene archivo).
+  if (doc.storagePath) {
+    await prisma.documentoVersion.create({
+      data: {
+        documentoId: id,
+        version: doc.version,
+        storagePath: doc.storagePath,
+        mime: doc.mime ?? "application/octet-stream",
+        tamano: doc.tamano,
+        autor: doc.autor,
+        fecha: doc.fechaSubida,
+      },
+    });
+  }
+
+  const n = (parseInt(doc.version, 10) || 1) + 1;
+  const nuevaVersion = `${n}.0`;
+  const nuevoPath = `${doc.areaSlug}/${id}-v${n}`;
+  await subirArchivo(nuevoPath, Buffer.from(data.contenidoBase64, "base64"), mime);
+
+  const actualizado = await prisma.documento.update({
+    where: { id },
+    data: {
+      storagePath: nuevoPath,
+      mime,
+      tamano: data.tamano || doc.tamano,
+      version: nuevaVersion,
+      fechaSubida: new Date().toISOString(),
+      autor: user.nombre,
+    },
+  });
+  return actualizado as unknown as Documento;
+}
+
+export interface VersionInfo {
+  id: string; version: string; tamano: string; autor: string; fecha: string;
+}
+
+/** Lista el historial de versiones anteriores de un documento. */
+export async function listarVersiones(user: UsuarioPublico, id: string): Promise<VersionInfo[]> {
+  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0];
+  if (!doc) return [];
+  if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
+  const versiones = await prisma.documentoVersion.findMany({
+    where: { documentoId: id },
+    orderBy: { fecha: "desc" },
+  });
+  return versiones.map((v) => ({ id: v.id, version: v.version, tamano: v.tamano, autor: v.autor, fecha: v.fecha }));
+}
+
+/** URL firmada para descargar una versión anterior. */
+export async function obtenerUrlVersion(
+  user: UsuarioPublico,
+  id: string,
+  versionId: string,
+): Promise<string | null> {
+  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0];
+  if (!doc) return null;
+  if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
+  const v = await prisma.documentoVersion.findUnique({ where: { id: versionId } });
+  if (!v || v.documentoId !== id) return null;
+  return urlFirmada(v.storagePath, `${doc.nombre} (v${v.version})`);
 }
