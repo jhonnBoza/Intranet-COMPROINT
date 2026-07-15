@@ -40,6 +40,12 @@ export function ProjectRepository({
   const [previsualizando, setPrevisualizando] = useState<Documento | null>(null);
   const [page, setPage] = useState(1);
 
+  // Al cambiar de proyecto, el servidor entrega otros documentos: re-sincronizamos.
+  useEffect(() => {
+    setDocs(docsIniciales);
+    setPage(1);
+  }, [docsIniciales]);
+
   async function eliminar(doc: Documento) {
     if (!confirm(`¿Eliminar "${doc.nombre}"? Esta acción no se puede deshacer.`)) return;
     const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });

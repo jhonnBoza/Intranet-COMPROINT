@@ -6,6 +6,27 @@ import { z } from "zod";
 //  datos inválidos con un 400 claro.
 // ============================================================
 
+// ---- Límite de tamaño de archivo ---------------------------------------
+
+/** Tamaño máximo de archivo permitido en subidas (25 MB). */
+export const MAX_ARCHIVO_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Estima los bytes reales de un contenido base64 y devuelve un error si excede
+ * el límite. Devuelve null si está dentro del límite o si no hay contenido.
+ */
+export function excedeLimiteArchivo(base64: string | null | undefined): string | null {
+  if (!base64) return null;
+  // Cada 4 chars de base64 ≈ 3 bytes (descontando el padding "=").
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  const bytes = Math.floor((base64.length * 3) / 4) - padding;
+  if (bytes > MAX_ARCHIVO_BYTES) {
+    const mb = (MAX_ARCHIVO_BYTES / 1024 / 1024).toFixed(0);
+    return `El archivo supera el límite de ${mb} MB.`;
+  }
+  return null;
+}
+
 /** Ejecuta un esquema zod contra datos desconocidos (ej. body de un request). */
 export function validar<T>(
   schema: z.ZodType<T>,

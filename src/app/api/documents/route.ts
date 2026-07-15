@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioActual } from "@/lib/session";
 import { crearDocumento, buscarGlobal } from "@/server/services/document.service";
 import { auditar } from "@/server/services/audit.service";
-import { validar, documentoNuevoSchema } from "@/lib/validation";
+import { validar, documentoNuevoSchema, excedeLimiteArchivo } from "@/lib/validation";
 import type { TipoArchivo } from "@/types";
 
 // GET /api/documents?q=...  →  búsqueda global
@@ -48,6 +48,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: validacion.error }, { status: 400 });
   }
   const { nombre, categoria, areaSlug, subareaSlug, confidencialidad, tamano } = validacion.data;
+
+  const excede = excedeLimiteArchivo(validacion.data.contenidoBase64);
+  if (excede) return NextResponse.json({ error: excede }, { status: 413 });
 
   try {
     const doc = await crearDocumento(user, {

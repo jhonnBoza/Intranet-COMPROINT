@@ -28,7 +28,10 @@ export async function auditar(user: UsuarioPublico, e: EventoAudit): Promise<voi
         areaSlug: e.areaSlug ?? null,
       },
     });
-  } catch { /* silencioso a propósito */ }
+  } catch (err) {
+    // No rompe la operación, pero sí lo dejamos en logs para no perder trazas.
+    console.error("[auditar] no se pudo registrar el evento:", err);
+  }
 }
 
 const PAGE = 25;

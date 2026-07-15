@@ -11,6 +11,15 @@ import { PROYECTOS } from "../src/server/data/projects";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Guarda de seguridad: el seed crea usuarios con contraseñas de demostración
+  // ("demo123"). Nunca debe ejecutarse contra la base de datos de producción.
+  if (process.env.NODE_ENV === "production" && !process.env.SEED_FORCE) {
+    throw new Error(
+      "Seed bloqueado en producción. Este seed crea usuarios con contraseñas demo. " +
+      "Si realmente lo necesitas, exporta SEED_FORCE=1 de forma consciente.",
+    );
+  }
+
   console.log("→ Áreas y sub-áreas…");
   for (const a of AREAS) {
     await prisma.area.upsert({

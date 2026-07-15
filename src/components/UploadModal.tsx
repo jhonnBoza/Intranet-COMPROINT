@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { UploadCloud, X, File as FileIco, Loader2 } from "lucide-react";
 import type { Area, Documento } from "@/types";
+import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
 
 interface Props {
   area: Area;
@@ -23,7 +24,13 @@ export function UploadModal({ area, onCerrar, onCreado }: Props) {
   const [error, setError] = useState("");
 
   function tomarArchivo(f: File | undefined) {
-    if (f) setArchivo(f);
+    if (!f) return;
+    if (f.size > MAX_ARCHIVO_BYTES) {
+      setError(`El archivo supera el límite de ${(MAX_ARCHIVO_BYTES / 1024 / 1024).toFixed(0)} MB.`);
+      return;
+    }
+    setError("");
+    setArchivo(f);
   }
 
   function leerBase64(f: File): Promise<string> {

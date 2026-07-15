@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 import { puedeGestionarUsuarios } from "@/lib/permissions";
@@ -51,7 +52,7 @@ export async function crearUsuario(admin: UsuarioPublico, data: NuevoUsuario): P
 
   const u = await prisma.usuario.create({
     data: {
-      id: `u-${Date.now().toString(36)}`,
+      id: `u-${randomUUID().slice(0, 12)}`,
       nombre: data.nombre.trim(),
       email,
       password: await hashPassword(data.password),

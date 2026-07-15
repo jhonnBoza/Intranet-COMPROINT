@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { getArea } from "@/server/data/areas";
 import { puedePublicarAnuncios } from "@/lib/permissions";
@@ -39,7 +40,7 @@ export async function crearAnuncio(
   }
   const anuncio = await prisma.anuncio.create({
     data: {
-      id: `a-${Date.now().toString(36)}`,
+      id: `a-${randomUUID().slice(0, 12)}`,
       titulo: data.titulo.trim(),
       cuerpo: data.cuerpo.trim(),
       fecha: new Date().toISOString(),

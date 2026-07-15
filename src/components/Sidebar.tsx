@@ -75,7 +75,7 @@ export function Sidebar({ areas, user, abierto, onCerrar }: Props) {
         <div className="border-t border-slate-200 px-4 py-3">
           <p className="text-2xs leading-relaxed text-slate-400">
             Soporte TI · anexo <span className="font-medium text-slate-500">100</span><br />
-            <span className="text-slate-400">v1.0 · entorno de pruebas</span>
+            <span className="text-slate-400">COMPROINT · Gestión documental</span>
           </p>
         </div>
       </aside>

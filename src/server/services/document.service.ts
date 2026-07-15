@@ -6,6 +6,7 @@ import {
   puedeEditarDocumento,
   puedeEliminarDocumento,
 } from "@/lib/permissions";
+import { randomUUID } from "crypto";
 import { subirArchivo, urlFirmada, borrarArchivo, descargarArchivo } from "@/lib/storage";
 import type { Documento, UsuarioPublico, TipoArchivo, EstadoDocumento, Confidencialidad } from "@/types";
 
@@ -16,6 +17,18 @@ import type { Documento, UsuarioPublico, TipoArchivo, EstadoDocumento, Confidenc
 // ============================================================
 
 const asDocs = (rows: unknown): Documento[] => rows as Documento[];
+
+/** Quita campos internos (storagePath, mime) antes de exponer al cliente. */
+function limpiar(doc: unknown): Documento {
+  const { storagePath, mime, ...pub } = doc as Record<string, unknown>;
+  return pub as unknown as Documento;
+}
+const limpiarLista = (docs: Documento[]): Documento[] => docs.map(limpiar);
+
+/** ID único (evita colisiones por milisegundo). */
+function nuevoId(prefijo: string): string {
+  return `${prefijo}-${randomUUID().slice(0, 12)}`;
+}
 
 /** Todos los documentos (sin filtrar por permiso). */
 async function todos(): Promise<Documento[]> {
@@ -52,7 +65,7 @@ export async function listarDocumentosDeArea(
     docs = docs.filter((d) => d.nombre.toLowerCase().includes(q));
   }
 
-  return docs.sort((a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida));
+  return limpiarLista(docs.sort((a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida)));
 }
 
 /** Todos los documentos visibles para el usuario (para dashboard/conteos). */
@@ -81,7 +94,8 @@ export async function buscarGlobal(
     .filter((d) =>
       `${d.nombre} ${d.autor} ${d.categoria}`.toLowerCase().includes(q),
     )
-    .slice(0, 10);
+    .slice(0, 10)
+    .map(limpiar);
 }
 
 /** Documentos de un proyecto (de todas las áreas) que el usuario puede ver. */
@@ -90,8 +104,10 @@ export async function listarDocumentosDeProyecto(
   proyectoSlug: string,
 ): Promise<Documento[]> {
   const rows = asDocs(await prisma.documento.findMany({ where: { proyectoSlug } }));
-  return documentosVisibles(user, rows).sort(
-    (a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida),
+  return limpiarLista(
+    documentosVisibles(user, rows).sort(
+      (a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida),
+    ),
   );
 }
 
@@ -117,7 +133,7 @@ export async function crearDocumento(
   if (!puedeSubir(user, data.areaSlug)) {
     throw new Error("No tiene permiso para subir documentos a esta área.");
   }
-  const id = `d-${Date.now().toString(36)}`;
+  const id = nuevoId("d");
   const mime = data.mime || "application/octet-stream";
 
   // Sube el archivo a Supabase Storage (si vino contenido).
@@ -148,7 +164,7 @@ export async function crearDocumento(
     },
   });
 
-  return doc as unknown as Documento;
+  return limpiar(doc);
 }
 
 type DocConArchivo = Documento & { storagePath?: string | null; mime?: string | null; soloVista?: boolean };
@@ -198,7 +214,7 @@ export async function actualizarDocumento(
       confidencialidad: cambios.confidencialidad ?? doc.confidencialidad,
     },
   });
-  return actualizado as unknown as Documento;
+  return limpiar(actualizado);
 }
 
 /** Elimina un documento (y su archivo en Storage). Devuelve nombre y área. */
@@ -211,11 +227,14 @@ export async function eliminarDocumento(
     | undefined;
   if (!doc) throw new Error("Documento no encontrado.");
   if (!puedeEliminarDocumento(user, doc)) throw new Error("Sin permiso para eliminar este documento.");
-  if (doc.storagePath) {
-    try { await borrarArchivo(doc.storagePath); } catch { /* si falla el storage, igual borramos el registro */ }
+  // Borra el archivo actual y los de todas las versiones anteriores.
+  const versiones = await prisma.documentoVersion.findMany({ where: { documentoId: id }, select: { storagePath: true } });
+  const rutas = [doc.storagePath, ...versiones.map((v) => v.storagePath)].filter(Boolean) as string[];
+  for (const ruta of rutas) {
+    try { await borrarArchivo(ruta); } catch { /* si falla el storage, igual borramos el registro */ }
   }
-  await prisma.documento.delete({ where: { id } });
   await prisma.documentoVersion.deleteMany({ where: { documentoId: id } });
+  await prisma.documento.delete({ where: { id } });
   return { nombre: doc.nombre, areaSlug: doc.areaSlug };
 }
 
@@ -267,7 +286,7 @@ export async function reemplazarArchivo(
       autor: user.nombre,
     },
   });
-  return actualizado as unknown as Documento;
+  return limpiar(actualizado);
 }
 
 export interface VersionInfo {
@@ -292,9 +311,10 @@ export async function obtenerUrlVersion(
   id: string,
   versionId: string,
 ): Promise<string | null> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0];
+  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as DocConArchivo | undefined;
   if (!doc) return null;
   if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
+  if (doc.soloVista) throw new Error("Este documento es solo de vista previa; no se puede descargar.");
   const v = await prisma.documentoVersion.findUnique({ where: { id: versionId } });
   if (!v || v.documentoId !== id) return null;
   return urlFirmada(v.storagePath, `${doc.nombre} (v${v.version})`);

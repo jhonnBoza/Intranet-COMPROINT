@@ -5,8 +5,18 @@ import { SignJWT, jwtVerify } from "jose";
 //  Autenticación — hash de contraseñas y firma de sesión.
 // ============================================================
 
+const secretRaw = process.env.SESSION_SECRET;
+
+// En producción es OBLIGATORIO configurar SESSION_SECRET: sin él, cualquiera
+// podría forjar una sesión firmando con un valor conocido. Fallamos rápido.
+if (!secretRaw && process.env.NODE_ENV === "production") {
+  throw new Error(
+    "SESSION_SECRET no está configurada. Es obligatoria en producción (genera un valor aleatorio largo).",
+  );
+}
+
 const secret = new TextEncoder().encode(
-  process.env.SESSION_SECRET || "dev-insecure-secret-cambiar-en-produccion",
+  secretRaw || "dev-insecure-secret-solo-para-desarrollo-local",
 );
 
 /** Hashea una contraseña (bcrypt). */

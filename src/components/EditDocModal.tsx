@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pencil, X, Loader2, History, Upload, Download } from "lucide-react";
 import type { Documento } from "@/types";
 import { formatoFecha } from "@/lib/format";
+import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
 
 const ESTADOS = [
   { v: "vigente", l: "Vigente" },
@@ -62,6 +63,10 @@ export function EditDocModal({
 
   async function subirNuevaVersion(f: File) {
     setError("");
+    if (f.size > MAX_ARCHIVO_BYTES) {
+      setError(`El archivo supera el límite de ${(MAX_ARCHIVO_BYTES / 1024 / 1024).toFixed(0)} MB.`);
+      return;
+    }
     setSubiendoVer(true);
     const contenidoBase64 = await leerBase64(f);
     const tamano = `${(f.size / 1024 / 1024).toFixed(1)} MB`;

@@ -48,11 +48,11 @@ export async function descargarArchivo(path: string): Promise<Buffer | null> {
   return Buffer.from(await data.arrayBuffer());
 }
 
-/** Genera una URL firmada temporal (60s). download opcional fuerza descarga. */
+/** Genera una URL firmada temporal (5 min). download opcional fuerza descarga. */
 export async function urlFirmada(path: string, download?: string): Promise<string | null> {
   const { data, error } = await admin()
     .storage.from(BUCKET)
-    .createSignedUrl(path, 60, download ? { download } : undefined);
+    .createSignedUrl(path, 300, download ? { download } : undefined);
   if (error || !data) return null;
   return data.signedUrl;
 }

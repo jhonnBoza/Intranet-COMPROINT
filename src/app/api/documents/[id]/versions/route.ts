@@ -6,6 +6,7 @@ import {
   obtenerUrlVersion,
 } from "@/server/services/document.service";
 import { auditar } from "@/server/services/audit.service";
+import { excedeLimiteArchivo } from "@/lib/validation";
 
 type Ctx = { params: { id: string } };
 
@@ -38,6 +39,8 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!body.contenidoBase64) {
     return NextResponse.json({ error: "Falta el archivo de la nueva versión." }, { status: 400 });
   }
+  const excede = excedeLimiteArchivo(body.contenidoBase64);
+  if (excede) return NextResponse.json({ error: excede }, { status: 413 });
   try {
     const doc = await reemplazarArchivo(user, params.id, {
       contenidoBase64: body.contenidoBase64,

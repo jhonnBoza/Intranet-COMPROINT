@@ -15,12 +15,11 @@ import { formatoFecha } from "@/lib/format";
 
 const ICONOS: Record<string, LucideIcon> = { Crown, BadgeCheck, Factory, FolderKanban, Truck, Briefcase };
 
-const FECHA_HOY = new Date("2026-07-13").toLocaleDateString("es-PE", {
-  weekday: "long", day: "numeric", month: "long", year: "numeric",
-});
-
 export default async function DashboardPage() {
   const user = (await getUsuarioActual())!;
+  const FECHA_HOY = new Date().toLocaleDateString("es-PE", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
   const areas = areasVisibles(user, AREAS);
   const [visibles, recientes, anuncios] = await Promise.all([
     documentosVisiblesTodos(user),

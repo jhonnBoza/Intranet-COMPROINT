@@ -85,6 +85,8 @@ export function documentosVisibles(user: U, docs: Documento[]): Documento[] {
 /** ¿Puede EDITAR / aprobar / cambiar estado del documento? */
 export function puedeEditarDocumento(user: U, doc: Documento): boolean {
   if (esGlobal(user)) return true;
+  // Prerrequisito: nadie edita un documento que no puede ver (ej. restringido).
+  if (!puedeVerDocumento(user, doc)) return false;
   if (user.rol === "JEFE_AREA") return user.areaSlug === doc.areaSlug;
   // El Supervisor solo puede intervenir documentos en revisión de su sub-área.
   if (user.rol === "SUPERVISOR") {
@@ -99,6 +101,7 @@ export function puedeEditarDocumento(user: U, doc: Documento): boolean {
 /** ¿Puede ELIMINAR / marcar obsoleto? (acción destructiva → restringida) */
 export function puedeEliminarDocumento(user: U, doc: Documento): boolean {
   if (esGlobal(user)) return true;
+  if (!puedeVerDocumento(user, doc)) return false; // no elimina lo que no puede ver
   if (user.rol === "JEFE_AREA") return user.areaSlug === doc.areaSlug;
   return false; // Supervisor y Operario no eliminan
 }

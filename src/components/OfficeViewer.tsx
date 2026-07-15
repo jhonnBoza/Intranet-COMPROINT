@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, FileWarning } from "lucide-react";
+import DOMPurify from "isomorphic-dompurify";
 
 interface Hoja { name: string; html: string }
 
@@ -24,13 +25,15 @@ export function OfficeViewer({ src, kind }: { src: string; kind: "word" | "excel
         if (kind === "word") {
           const mammoth: any = await import("mammoth");
           const out = await mammoth.convertToHtml({ arrayBuffer: buf });
-          if (!cancel) { setHtml(out.value || "<p>(documento vacío)</p>"); setCargando(false); }
+          // El .docx es contenido no confiable: sanitizamos antes de inyectarlo.
+          const limpio = DOMPurify.sanitize(out.value || "<p>(documento vacío)</p>");
+          if (!cancel) { setHtml(limpio); setCargando(false); }
         } else {
           const XLSX: any = await import("xlsx");
           const wb = XLSX.read(buf, { type: "array" });
           const hs: Hoja[] = wb.SheetNames.map((name: string) => ({
             name,
-            html: XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false }),
+            html: DOMPurify.sanitize(XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false })),
           }));
           if (!cancel) { setHojas(hs); setCargando(false); }
         }
