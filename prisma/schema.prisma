@@ -1,0 +1,111 @@
+// Esquema de la base de datos — Intranet COMPROINT
+// Modela usuarios, organigrama (áreas/sub-áreas), documentos,
+// proyectos y anuncios. Campos alineados 1:1 con src/types.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Usuario {
+  id          String  @id
+  nombre      String
+  email       String  @unique
+  password    String
+  rol         String
+  cargo       String
+  areaSlug    String?
+  subareaSlug String?
+  avatarColor String
+  activo      Boolean @default(true)
+}
+
+model Area {
+  slug        String    @id
+  nombre      String
+  descripcion String
+  icono       String
+  subareas    SubArea[]
+}
+
+model SubArea {
+  id       Int    @id @default(autoincrement())
+  areaSlug String
+  slug     String
+  nombre   String
+  area     Area   @relation(fields: [areaSlug], references: [slug], onDelete: Cascade)
+
+  @@unique([areaSlug, slug])
+}
+
+model Documento {
+  id               String  @id
+  nombre           String
+  tipo             String
+  categoria        String
+  areaSlug         String
+  subareaSlug      String?
+  fechaSubida      String
+  autor            String
+  estado           String
+  confidencialidad String
+  version          String
+  tamano           String
+  proyectoSlug     String?
+  storagePath      String? // ruta del archivo en Supabase Storage
+  mime             String? // tipo MIME del archivo
+  soloVista        Boolean @default(false) // solo vista previa (sin descarga)
+
+  @@index([areaSlug])
+  @@index([proyectoSlug])
+}
+
+model Proyecto {
+  slug        String @id
+  nombre      String
+  descripcion String
+  estado      String
+}
+
+model Anuncio {
+  id        String @id
+  titulo    String
+  cuerpo    String
+  fecha     String
+  autor     String
+  prioridad String
+}
+
+// Bitácora de auditoría — quién hizo qué y cuándo (trazabilidad ISO 9001).
+model Auditoria {
+  id            String @id @default(cuid())
+  fecha         String // ISO
+  usuarioId     String
+  usuarioNombre String
+  rol           String
+  accion        String // subió, descargó, vio, editó, eliminó, publicó, inició sesión…
+  entidad       String // documento, proyecto, carpeta, usuario, anuncio, sesión
+  detalle       String // nombre/título del elemento afectado
+  areaSlug      String?
+
+  @@index([fecha])
+  @@index([usuarioId])
+}
+
+// Notificaciones por usuario.
+model Notificacion {
+  id        String  @id @default(cuid())
+  usuarioId String
+  titulo    String
+  cuerpo    String
+  url       String?
+  fecha     String
+  leida     Boolean @default(false)
+
+  @@index([usuarioId])
+}

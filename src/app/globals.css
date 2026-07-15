@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --canvas: #fafafa;
+}
+
+body {
+  @apply bg-[color:var(--canvas)] text-slate-700 antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  letter-spacing: -0.006em;
+}
+
+/* Tipografía de números tabulares para tablas y métricas */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbar sobrio */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300/70 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+
+/* Utilidades de componente reutilizables */
+@layer components {
+  .field-select {
+    @apply h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none transition
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-100;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-ink-900 px-3.5 py-2 text-sm font-medium
+           text-white transition hover:bg-ink-800 focus:outline-none focus:ring-2 focus:ring-slate-300
+           disabled:opacity-60;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3.5 py-2
+           text-sm font-medium text-slate-700 transition hover:bg-slate-50;
+  }
+}
