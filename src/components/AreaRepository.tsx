@@ -41,6 +41,9 @@ export function AreaRepository({
   const [modalCarpeta, setModalCarpeta] = useState(false);
   const [editando, setEditando] = useState<Documento | null>(null);
   const [previsualizando, setPrevisualizando] = useState<Documento | null>(null);
+  // Arrastrar archivos sobre cualquier parte de la página abre el modal con ellos.
+  const [arrastrando, setArrastrando] = useState(false);
+  const [archivosSoltados, setArchivosSoltados] = useState<File[] | undefined>();
 
   async function eliminar(doc: Documento) {
     if (!confirm(`¿Eliminar "${doc.nombre}"? Esta acción no se puede deshacer.`)) return;
@@ -115,15 +118,59 @@ export function AreaRepository({
     });
   }
 
+  // Se llama por CADA archivo subido: no cerramos el modal, la cola sigue.
   function onCreado(doc: Documento) {
     setDocs((prev) => [doc, ...prev]);
+  }
+
+  function cerrarSubida() {
     setModal(false);
+    setArchivosSoltados(undefined);
+  }
+
+  // --- Arrastrar archivos sobre la página completa -------------------------
+  function contieneArchivos(e: React.DragEvent) {
+    return Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  }
+  function alArrastrarSobrePagina(e: React.DragEvent) {
+    if (!puedeSubirAqui || !contieneArchivos(e)) return;
+    e.preventDefault();
+    setArrastrando(true);
+  }
+  function alSoltarEnPagina(e: React.DragEvent) {
+    if (!puedeSubirAqui || !contieneArchivos(e)) return;
+    e.preventDefault();
+    setArrastrando(false);
+    const archivos = Array.from(e.dataTransfer.files ?? []);
+    // Si arrastran carpetas, el modal las recorre; aquí basta con abrirlo.
+    setArchivosSoltados(archivos.length ? archivos : undefined);
+    setModal(true);
   }
 
   const subActiva = sub !== "todos" ? area.subareas.find((s) => s.slug === sub)?.nombre : undefined;
 
   return (
-    <div className="space-y-5">
+    <div
+      className="relative space-y-5"
+      onDragOver={alArrastrarSobrePagina}
+      onDragEnter={alArrastrarSobrePagina}
+      onDragLeave={(e) => {
+        // Solo apagamos el aviso al salir del contenedor, no de un hijo.
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setArrastrando(false);
+      }}
+      onDrop={alSoltarEnPagina}
+    >
+      {/* Aviso al arrastrar archivos sobre la página */}
+      {arrastrando && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-brand-900/25 backdrop-blur-[2px]">
+          <div className="rounded-2xl border-2 border-dashed border-white/80 bg-brand-800/90 px-10 py-8 text-center shadow-2xl">
+            <Plus size={40} className="mx-auto mb-2 text-white" />
+            <p className="text-lg font-semibold text-white">Suelta para subir a {area.nombre}</p>
+            <p className="mt-0.5 text-sm text-white/70">Puedes soltar varios archivos o una carpeta completa</p>
+          </div>
+        </div>
+      )}
+
       {/* Encabezado + breadcrumb */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -247,7 +294,12 @@ export function AreaRepository({
       </div>
 
       {modal && (
-        <UploadModal area={area} onCerrar={() => setModal(false)} onCreado={onCreado} />
+        <UploadModal
+          area={area}
+          onCerrar={cerrarSubida}
+          onCreado={onCreado}
+          archivosIniciales={archivosSoltados}
+        />
       )}
 
       {modalCarpeta && (
