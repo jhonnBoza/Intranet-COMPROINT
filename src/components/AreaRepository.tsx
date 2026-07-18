@@ -13,6 +13,7 @@ import { StatusBadge, ConfidentialityBadge } from "./StatusBadge";
 import { UploadModal } from "./UploadModal";
 import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
+import { ModalPortal } from "./ModalPortal";
 import { formatoFecha } from "@/lib/format";
 
 const PAGE_SIZE = 12;
@@ -160,15 +161,17 @@ export function AreaRepository({
       }}
       onDrop={alSoltarEnPagina}
     >
-      {/* Aviso al arrastrar archivos sobre la página */}
+      {/* Aviso al arrastrar archivos sobre la página (en portal: cubre todo) */}
       {arrastrando && (
-        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-brand-900/25 backdrop-blur-[2px]">
-          <div className="rounded-2xl border-2 border-dashed border-white/80 bg-brand-800/90 px-10 py-8 text-center shadow-2xl">
-            <Plus size={40} className="mx-auto mb-2 text-white" />
-            <p className="text-lg font-semibold text-white">Suelta para subir a {area.nombre}</p>
-            <p className="mt-0.5 text-sm text-white/70">Puedes soltar varios archivos o una carpeta completa</p>
+        <ModalPortal>
+          <div className="pointer-events-none fixed inset-0 z-[65] flex items-center justify-center bg-brand-900/30 backdrop-blur-[2px]">
+            <div className="rounded-2xl border-2 border-dashed border-white/80 bg-brand-800/90 px-10 py-8 text-center shadow-2xl">
+              <Plus size={40} className="mx-auto mb-2 text-white" />
+              <p className="text-lg font-semibold text-white">Suelta para subir a {area.nombre}</p>
+              <p className="mt-0.5 text-sm text-white/70">Puedes soltar varios archivos o una carpeta completa</p>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Encabezado + breadcrumb */}
@@ -344,8 +347,9 @@ function NuevaCarpetaModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-ink-950/50" onClick={onCerrar} />
+    <ModalPortal>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm" onClick={onCerrar} />
       <div className="relative w-full max-w-md overflow-hidden rounded-xl bg-white shadow-panel">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -378,6 +382,7 @@ function NuevaCarpetaModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 

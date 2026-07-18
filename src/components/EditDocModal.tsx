@@ -5,6 +5,7 @@ import { Pencil, X, Loader2, History, Upload, Download } from "lucide-react";
 import type { Documento } from "@/types";
 import { formatoFecha } from "@/lib/format";
 import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
+import { ModalPortal } from "./ModalPortal";
 
 const ESTADOS = [
   { v: "vigente", l: "Vigente" },
@@ -85,8 +86,9 @@ export function EditDocModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-ink-950/50" onClick={onCerrar} />
+    <ModalPortal>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm" onClick={onCerrar} />
       <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-panel">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -160,5 +162,6 @@ export function EditDocModal({
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

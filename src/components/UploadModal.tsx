@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { UploadCloud, X, Loader2, FolderUp, CheckCircle2, AlertCircle, Trash2, FileText } from "lucide-react";
 import type { Area, Documento } from "@/types";
 import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
@@ -85,6 +86,10 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
   const [error, setError] = useState("");
   const idRef = useRef(0);
   const inputCarpeta = useRef<HTMLInputElement>(null);
+  // Se monta en un portal sobre <body>: así el modal no hereda márgenes ni
+  // recortes del contenedor (p. ej. el space-y del repositorio).
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
 
   // Archivos que llegan de un arrastre sobre la página.
   useEffect(() => {
@@ -212,9 +217,11 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
   const enCurso = items.filter((i) => i.estado === "subiendo").length;
   const progreso = total ? Math.round(((ok + fallidos) / total) * 100) : 0;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={subiendo ? undefined : onCerrar} />
+  if (!montado) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={subiendo ? undefined : onCerrar} />
 
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         {/* Encabezado */}
@@ -440,7 +447,8 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
         .select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
         .select:disabled { background: rgb(248 250 252); color: rgb(148 163 184); }
       `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
