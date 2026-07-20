@@ -56,6 +56,12 @@ export function Header({
     }
   }
 
+  async function borrarNotis() {
+    setNotis([]);
+    setNoLeidas(0);
+    await fetch("/api/notifications", { method: "DELETE" });
+  }
+
   useEffect(() => {
     if (!q.trim()) { setResultados([]); setBuscando(false); return; }
     setBuscando(true);
@@ -150,8 +156,13 @@ export function Header({
 
           {notiAbierto && (
             <div className="absolute right-0 top-11 w-80 overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-700 shadow-panel">
-              <div className="border-b border-slate-100 px-4 py-2.5">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
                 <p className="text-sm font-semibold text-slate-800">Notificaciones</p>
+                {notis.length > 0 && (
+                  <button onClick={borrarNotis} className="text-xs font-medium text-slate-400 hover:text-estado-obsoleto">
+                    Borrar todas
+                  </button>
+                )}
               </div>
               <div className="max-h-96 overflow-y-auto">
                 {notis.length === 0 && (

@@ -72,3 +72,9 @@ export async function marcarLeidas(user: UsuarioPublico): Promise<void> {
     data: { leida: true },
   });
 }
+
+/** Borra todas las notificaciones del usuario (las suyas, no las de otros). */
+export async function eliminarNotificaciones(user: UsuarioPublico): Promise<number> {
+  const r = await prisma.notificacion.deleteMany({ where: { usuarioId: user.id } });
+  return r.count;
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioActual } from "@/lib/session";
-import { listarNotificaciones, marcarLeidas } from "@/server/services/notification.service";
+import { listarNotificaciones, marcarLeidas, eliminarNotificaciones } from "@/server/services/notification.service";
 
 // GET /api/notifications  →  notificaciones del usuario + no leídas
 export async function GET() {
@@ -15,4 +15,12 @@ export async function PATCH() {
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   await marcarLeidas(user);
   return NextResponse.json({ ok: true });
+}
+
+// DELETE /api/notifications  →  borra todas las notificaciones del usuario
+export async function DELETE() {
+  const user = await getUsuarioActual();
+  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  const eliminadas = await eliminarNotificaciones(user);
+  return NextResponse.json({ ok: true, eliminadas });
 }
