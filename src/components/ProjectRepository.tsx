@@ -9,6 +9,7 @@ import { accionesSobreDocumento } from "@/lib/permissions";
 import { FileIcon, etiquetaTipo } from "./FileIcon";
 import { StatusBadge, ConfidentialityBadge } from "./StatusBadge";
 import { VigenciaBadge } from "./VigenciaBadge";
+import { useConfirm, useToast } from "./Feedback";
 import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { formatoFecha, norm } from "@/lib/format";
@@ -33,6 +34,8 @@ export function ProjectRepository({
   user: UsuarioPublico;
   docsIniciales: Documento[];
 }) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [docs, setDocs] = useState(docsIniciales);
   const [q, setQ] = useState("");
   const [area, setArea] = useState("todos");
@@ -48,10 +51,16 @@ export function ProjectRepository({
   }, [docsIniciales]);
 
   async function eliminar(doc: Documento) {
-    if (!confirm(`¿Eliminar "${doc.nombre}"? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirm({
+      titulo: "Enviar a la papelera",
+      mensaje: `“${doc.nombre}” se moverá a la papelera. Gerencia puede restaurarlo.`,
+      confirmar: "Enviar a papelera",
+      peligro: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
-    if (res.ok) setDocs((prev) => prev.filter((d) => d.id !== doc.id));
-    else { const data = await res.json().catch(() => ({})); alert(data.error ?? "No se pudo eliminar."); }
+    if (res.ok) { setDocs((prev) => prev.filter((d) => d.id !== doc.id)); toast("Documento enviado a la papelera."); }
+    else { const data = await res.json().catch(() => ({})); toast(data.error ?? "No se pudo eliminar.", "error"); }
   }
   function onEditado(doc: Documento) {
     setDocs((prev) => prev.map((d) => (d.id === doc.id ? doc : d)));

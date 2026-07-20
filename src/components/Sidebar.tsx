@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { Area, UsuarioPublico } from "@/types";
 import { puedeGestionarArea, puedeGestionarUsuarios } from "@/lib/permissions";
+import { useConfirm, useToast } from "./Feedback";
 
 const ICONOS: Record<string, LucideIcon> = { Crown, BadgeCheck, Factory, FolderKanban, Truck, Briefcase };
 
@@ -106,6 +107,8 @@ function AreaItem({
   area, user, pathname, onNavegar,
 }: { area: Area; user: UsuarioPublico; pathname: string; onNavegar: () => void }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const rutaBase = `/area/${area.slug}`;
   const activoArea = pathname.startsWith(rutaBase);
   const [abierto, setAbierto] = useState(activoArea);
@@ -118,13 +121,20 @@ function AreaItem({
   }, [activoArea]);
 
   async function eliminarCarpeta(slug: string, nombre: string) {
-    if (!confirm(`¿Eliminar la carpeta "${nombre}"?`)) return;
+    const ok = await confirm({
+      titulo: "Eliminar carpeta",
+      mensaje: `¿Eliminar la carpeta “${nombre}”?`,
+      confirmar: "Eliminar",
+      peligro: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/subareas?areaSlug=${area.slug}&slug=${slug}`, { method: "DELETE" });
     if (res.ok) {
+      toast("Carpeta eliminada.");
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
-      alert(data.error ?? "No se pudo eliminar la carpeta.");
+      toast(data.error ?? "No se pudo eliminar la carpeta.", "error");
     }
   }
 
@@ -136,7 +146,7 @@ function AreaItem({
           <Icon size={17} className={activoArea ? "text-slate-700" : "text-slate-400"} strokeWidth={1.9} />
           <span className={`text-[13.5px] ${activoArea ? "font-medium text-slate-900" : "text-slate-600"}`}>{area.nombre}</span>
         </Link>
-        <button onClick={() => setAbierto((v) => !v)} className="px-2 py-2 text-slate-300 hover:text-slate-500" aria-label="Expandir sub-áreas">
+        <button onClick={() => setAbierto((v) => !v)} className="px-2 py-2 text-slate-300 hover:text-slate-500" aria-label="Expandir carpetas">
           <ChevronRight size={14} className={`transition-transform ${abierto ? "rotate-90" : ""}`} />
         </button>
       </div>

@@ -15,6 +15,7 @@ import { UploadModal } from "./UploadModal";
 import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { ModalPortal } from "./ModalPortal";
+import { useConfirm, useToast } from "./Feedback";
 import { formatoFecha, norm } from "@/lib/format";
 
 const PAGE_SIZE = 12;
@@ -39,6 +40,8 @@ export function AreaRepository({
   qInicial?: string;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const toast = useToast();
   const [docs, setDocs] = useState(docsIniciales);
   const [modal, setModal] = useState(false);
   const [modalCarpeta, setModalCarpeta] = useState(false);
@@ -49,15 +52,22 @@ export function AreaRepository({
   const [archivosSoltados, setArchivosSoltados] = useState<File[] | undefined>();
 
   async function eliminar(doc: Documento) {
-    if (!confirm(`¿Enviar "${doc.nombre}" a la papelera? Gerencia puede restaurarlo.`)) return;
+    const ok = await confirm({
+      titulo: "Enviar a la papelera",
+      mensaje: `“${doc.nombre}” se moverá a la papelera. Gerencia puede restaurarlo.`,
+      confirmar: "Enviar a papelera",
+      peligro: true,
+    });
+    if (!ok) return;
     const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
     if (res.ok) {
       setDocs((prev) => prev.filter((d) => d.id !== doc.id));
       // Quitarlo también de la selección para que el contador no quede descuadrado.
       setSel((prev) => { const n = new Set(prev); n.delete(doc.id); return n; });
+      toast("Documento enviado a la papelera.");
     } else {
       const data = await res.json().catch(() => ({}));
-      alert(data.error ?? "No se pudo eliminar.");
+      toast(data.error ?? "No se pudo eliminar.", "error");
     }
   }
 
@@ -235,7 +245,7 @@ export function AreaRepository({
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Select value={cat} onChange={setCat} opciones={CATEGORIAS.map((c) => ({ v: c, l: c === "todos" ? "Todos los tipos" : c }))} />
-          <Select value={sub} onChange={setSub} opciones={[{ v: "todos", l: "Todas las sub-áreas" }, ...area.subareas.map((s) => ({ v: s.slug, l: s.nombre }))]} />
+          <Select value={sub} onChange={setSub} opciones={[{ v: "todos", l: "Todas las carpetas" }, ...area.subareas.map((s) => ({ v: s.slug, l: s.nombre }))]} />
           <Select value={estado} onChange={setEstado} opciones={ESTADOS} />
         </div>
       </div>
@@ -263,7 +273,7 @@ export function AreaRepository({
                 </th>
                 <ThSort label="Nombre del archivo" activo={sortKey === "nombre"} dir={sortDir} onClick={() => ordenarPor("nombre")} />
                 <th className="px-4 py-2.5 font-semibold">Tipo</th>
-                <th className="px-4 py-2.5 font-semibold">Sub-área</th>
+                <th className="px-4 py-2.5 font-semibold">Carpeta</th>
                 <ThSort label="Fecha" activo={sortKey === "fechaSubida"} dir={sortDir} onClick={() => ordenarPor("fechaSubida")} />
                 <th className="px-4 py-2.5 font-semibold">Autor</th>
                 <ThSort label="Estado" activo={sortKey === "estado"} dir={sortDir} onClick={() => ordenarPor("estado")} />
@@ -403,7 +413,7 @@ function NuevaCarpetaModal({
             autoFocus
             className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
           />
-          <p className="mt-2 text-xs text-slate-400">La carpeta se crea como sub-área dentro de esta área.</p>
+          <p className="mt-2 text-xs text-slate-400">La carpeta se crea dentro de esta área.</p>
           {error && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-estado-obsoleto">{error}</p>}
         </div>
         <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { FeedbackProvider } from "./Feedback";
 import type { Area, UsuarioPublico } from "@/types";
 
 export function AppShell({
@@ -17,18 +18,20 @@ export function AppShell({
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[color:var(--canvas)]">
-      <Header user={user} onToggleSidebar={() => setSidebarAbierto((v) => !v)} />
+    <FeedbackProvider>
+      <div className="flex h-screen flex-col overflow-hidden bg-[color:var(--canvas)]">
+        <Header user={user} onToggleSidebar={() => setSidebarAbierto((v) => !v)} />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar areas={areas} user={user} abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar areas={areas} user={user} abierto={sidebarAbierto} onCerrar={() => setSidebarAbierto(false)} />
 
-        <main className="flex flex-1 flex-col overflow-y-auto">
-          <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 lg:px-8">{children}</div>
-          <Footer />
-        </main>
+          <main className="flex flex-1 flex-col overflow-y-auto">
+            <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 lg:px-8">{children}</div>
+            <Footer />
+          </main>
+        </div>
       </div>
-    </div>
+    </FeedbackProvider>
   );
 }
 

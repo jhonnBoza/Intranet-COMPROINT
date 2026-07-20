@@ -407,7 +407,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
                   {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Campo>
-              <Campo label="Sub-área">
+              <Campo label="Carpeta">
                 <select value={subarea} onChange={(e) => setSubarea(e.target.value)} className="select" disabled={subiendo}>
                   {area.subareas.map((sa) => <option key={sa.slug} value={sa.slug}>{sa.nombre}</option>)}
                 </select>

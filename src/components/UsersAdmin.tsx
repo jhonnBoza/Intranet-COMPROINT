@@ -5,6 +5,7 @@ import { Plus, X, Loader2, Pencil, UserCheck, UserX, ChevronRight, Search } from
 import type { UsuarioPublico, Rol } from "@/types";
 import { AREAS } from "@/server/data/areas";
 import { ETIQUETA_ROL } from "@/lib/permissions";
+import { useToast } from "./Feedback";
 
 const ROLES: Rol[] = ["GERENTE_GENERAL", "JEFE_AREA", "SUPERVISOR", "OPERARIO"];
 const NOMBRE_AREA: Record<string, string> = Object.fromEntries(AREAS.map((a) => [a.slug, a.nombre]));
@@ -13,6 +14,7 @@ const PAGE_SIZE = 12;
 export function UsersAdmin({
   usuariosIniciales, adminId,
 }: { usuariosIniciales: UsuarioPublico[]; adminId: string }) {
+  const toast = useToast();
   const [usuarios, setUsuarios] = useState(usuariosIniciales);
   const [q, setQ] = useState("");
   const [modalNuevo, setModalNuevo] = useState(false);
@@ -48,9 +50,9 @@ export function UsersAdmin({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ activo: !u.activo }),
     });
-    const data = await res.json();
-    if (res.ok) tras(data.usuario);
-    else alert(data.error ?? "No se pudo actualizar.");
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) { tras(data.usuario); toast(data.usuario.activo ? "Usuario activado." : "Usuario desactivado."); }
+    else toast(data.error ?? "No se pudo actualizar.", "error");
   }
 
   return (

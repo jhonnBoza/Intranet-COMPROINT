@@ -6,6 +6,7 @@ import type { Documento } from "@/types";
 import { FileIcon } from "./FileIcon";
 import { ConfidentialityBadge } from "./StatusBadge";
 import { FilePreviewModal } from "./FilePreviewModal";
+import { useConfirm, useToast } from "./Feedback";
 import { formatoFecha } from "@/lib/format";
 import { AREAS } from "@/server/data/areas";
 
@@ -15,9 +16,19 @@ export function ApprovalPanel({ documentosIniciales }: { documentosIniciales: Do
   const [docs, setDocs] = useState(documentosIniciales);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [previsualizando, setPrevisualizando] = useState<Documento | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function decidir(doc: Documento, estado: "vigente" | "obsoleto") {
-    if (estado === "obsoleto" && !confirm(`¿Rechazar "${doc.nombre}"? Quedará marcado como obsoleto.`)) return;
+    if (estado === "obsoleto") {
+      const ok = await confirm({
+        titulo: "Rechazar documento",
+        mensaje: `“${doc.nombre}” quedará marcado como obsoleto.`,
+        confirmar: "Rechazar",
+        peligro: true,
+      });
+      if (!ok) return;
+    }
     setOcupado(doc.id);
     const res = await fetch(`/api/documents/${doc.id}`, {
       method: "PATCH",
@@ -25,8 +36,8 @@ export function ApprovalPanel({ documentosIniciales }: { documentosIniciales: Do
       body: JSON.stringify({ estado }),
     });
     setOcupado(null);
-    if (res.ok) setDocs((prev) => prev.filter((d) => d.id !== doc.id));
-    else { const d = await res.json().catch(() => ({})); alert(d.error ?? "No se pudo actualizar."); }
+    if (res.ok) { setDocs((prev) => prev.filter((d) => d.id !== doc.id)); toast(estado === "vigente" ? "Documento aprobado." : "Documento rechazado."); }
+    else { const d = await res.json().catch(() => ({})); toast(d.error ?? "No se pudo actualizar.", "error"); }
   }
 
   return (

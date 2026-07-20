@@ -178,7 +178,7 @@ export function EditDocModal({
           <div className="grid grid-cols-2 gap-3">
             {subareas && subareas.length > 0 && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">Carpeta (sub-área)</label>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Carpeta</label>
                 <select value={subarea} onChange={(e) => setSubarea(e.target.value)} className="field-select w-full">
                   <option value="">— Sin carpeta —</option>
                   {subareas.map((s) => <option key={s.slug} value={s.slug}>{s.nombre}</option>)}
