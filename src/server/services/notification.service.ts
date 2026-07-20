@@ -25,6 +25,37 @@ export async function notificarATodos(
   } catch { /* la notificación no debe romper la operación */ }
 }
 
+/**
+ * Notifica a quienes pueden aprobar documentos de un área: el/los Jefe(s) de
+ * esa área y la Gerencia General. Se usa al subir un documento nuevo.
+ */
+export async function notificarAprobadores(
+  areaSlug: string,
+  titulo: string,
+  cuerpo: string,
+  url?: string,
+  exceptoId?: string,
+): Promise<void> {
+  try {
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        activo: true,
+        ...(exceptoId ? { id: { not: exceptoId } } : {}),
+        OR: [
+          { rol: "GERENTE_GENERAL" },
+          { rol: "JEFE_AREA", areaSlug },
+        ],
+      },
+      select: { id: true },
+    });
+    if (usuarios.length === 0) return;
+    const fecha = new Date().toISOString();
+    await prisma.notificacion.createMany({
+      data: usuarios.map((u) => ({ usuarioId: u.id, titulo, cuerpo, url: url ?? null, fecha })),
+    });
+  } catch { /* la notificación no debe romper la operación */ }
+}
+
 export async function listarNotificaciones(user: UsuarioPublico) {
   const [items, noLeidas] = await Promise.all([
     prisma.notificacion.findMany({ where: { usuarioId: user.id }, orderBy: { fecha: "desc" }, take: 20 }),

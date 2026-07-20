@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioActual } from "@/lib/session";
 import { crearDocumento, buscarGlobal } from "@/server/services/document.service";
 import { auditar } from "@/server/services/audit.service";
+import { notificarAprobadores } from "@/server/services/notification.service";
 import { validar, documentoNuevoSchema, excedeLimiteArchivo } from "@/lib/validation";
 import type { TipoArchivo } from "@/types";
 
@@ -69,6 +70,14 @@ export async function POST(req: Request) {
       soloVista: !!validacion.data.soloVista,
     });
     await auditar(user, { accion: "subió", entidad: "documento", detalle: doc.nombre, areaSlug: doc.areaSlug });
+    // Avisa a los aprobadores (jefe del área + gerencia) que hay algo por revisar.
+    await notificarAprobadores(
+      doc.areaSlug,
+      "Documento pendiente de revisión",
+      `${user.nombre} subió “${doc.nombre}”.`,
+      `/area/${doc.areaSlug}`,
+      user.id,
+    );
     return NextResponse.json({ documento: doc }, { status: 201 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error al crear el documento.";

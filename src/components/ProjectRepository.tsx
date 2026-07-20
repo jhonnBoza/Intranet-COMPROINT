@@ -127,7 +127,8 @@ export function ProjectRepository({
 
       {/* Tabla */}
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
+        {/* Tabla — escritorio */}
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-2xs uppercase tracking-wide text-slate-500">
@@ -147,6 +148,13 @@ export function ProjectRepository({
             </tbody>
           </table>
         </div>
+
+        {/* Tarjetas — móvil */}
+        <ul className="divide-y divide-slate-100 sm:hidden">
+          {pagina.map((d) => (
+            <TarjetaMovil key={d.id} doc={d} user={user} onVer={setPrevisualizando} onEditar={setEditando} onEliminar={eliminar} />
+          ))}
+        </ul>
 
         {filtrados.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-1.5 py-16 text-center">
@@ -240,6 +248,57 @@ function Fila({
         </div>
       </td>
     </tr>
+  );
+}
+
+function TarjetaMovil({
+  doc, user, onVer, onEditar, onEliminar,
+}: {
+  doc: Documento; user: UsuarioPublico;
+  onVer: (d: Documento) => void; onEditar: (d: Documento) => void; onEliminar: (d: Documento) => void;
+}) {
+  const acc = accionesSobreDocumento(user, doc);
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-start gap-3">
+        <FileIcon tipo={doc.tipo} size={20} />
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-medium text-slate-800">{doc.nombre}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-slate-500">
+            <StatusBadge estado={doc.estado} />
+            <ConfidentialityBadge nivel={doc.confidencialidad} />
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">{NOMBRE_AREA[doc.areaSlug] ?? doc.areaSlug}</span>
+          </div>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-2xs text-slate-500">
+            <span>{doc.autor}</span>
+            <span className="tabular">{formatoFecha(doc.fechaSubida)}</span>
+            <span className="tabular">v{doc.version}</span>
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {acc.ver && (
+              <button onClick={() => onVer(doc)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                <Eye size={14} /> Ver
+              </button>
+            )}
+            {acc.descargar && !doc.soloVista && (
+              <a href={`/api/documents/${doc.id}`} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                <Download size={14} /> Descargar
+              </a>
+            )}
+            {acc.editar && (
+              <button onClick={() => onEditar(doc)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                <Pencil size={14} /> Editar
+              </button>
+            )}
+            {acc.eliminar && (
+              <button onClick={() => onEliminar(doc)} className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-estado-obsoleto">
+                <Trash2 size={14} /> Eliminar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 

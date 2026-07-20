@@ -111,6 +111,7 @@ export function Header({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar…"
+          aria-label="Buscar documentos"
           className="h-9 w-full rounded-md border border-white/15 bg-white/10 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-brand-200 focus:border-white/30 focus:bg-white/15"
         />
         {q.trim() && (

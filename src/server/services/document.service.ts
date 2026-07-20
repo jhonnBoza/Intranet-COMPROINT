@@ -141,6 +141,26 @@ export async function listarDocumentosDeProyecto(
   return limpiarLista(rows);
 }
 
+/** Documentos en revisión que el usuario puede aprobar (bandeja de pendientes). */
+export async function documentosPendientes(user: UsuarioPublico): Promise<Documento[]> {
+  if (user.rol === "OPERARIO") return []; // el operario no aprueba nada
+  const rows = asDocs(
+    await prisma.documento.findMany({
+      where: { ...whereVisible(user), estado: "revision", eliminado: false },
+      orderBy: { fechaSubida: "desc" },
+    }),
+  );
+  return limpiarLista(rows);
+}
+
+/** Cuántos documentos hay pendientes de aprobar para este usuario. */
+export async function contarPendientes(user: UsuarioPublico): Promise<number> {
+  if (user.rol === "OPERARIO") return 0;
+  return prisma.documento.count({
+    where: { ...whereVisible(user), estado: "revision", eliminado: false },
+  });
+}
+
 /** Conteo de documentos visibles por área (para el panel, sin traer filas). */
 export async function contarDocumentosPorArea(
   user: UsuarioPublico,

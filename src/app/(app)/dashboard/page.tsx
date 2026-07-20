@@ -46,7 +46,8 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0">
         <Kpi label="Áreas con acceso" valor={areas.length} />
         <Kpi label="Documentos accesibles" valor={total} destacado />
-        <Kpi label="En revisión" valor={enRevision} sufijo={enRevision > 0 ? "revision" : undefined} />
+        <Kpi label="En revisión" valor={enRevision} sufijo={enRevision > 0 ? "revision" : undefined}
+          href={user.rol !== "OPERARIO" ? "/pendientes" : undefined} />
         <Kpi label="Obsoletos" valor={obsoletos} sufijo={obsoletos > 0 ? "obsoleto" : undefined} />
       </div>
 
@@ -123,18 +124,24 @@ function Kpi({
   valor,
   sufijo,
   destacado,
+  href,
 }: {
   label: string;
   valor: number;
   sufijo?: "revision" | "obsoleto";
   destacado?: boolean;
+  href?: string;
 }) {
   const color = sufijo === "revision" ? "text-estado-revision" : sufijo === "obsoleto" ? "text-estado-obsoleto" : destacado ? "text-gold-600" : "text-ink-900";
-  return (
-    <div className="relative px-5 py-4">
+  const contenido = (
+    <>
       {destacado && <span className="absolute inset-x-0 top-0 h-0.5 bg-gold-400" />}
       <p className={`text-[26px] font-semibold leading-none tabular ${color}`}>{valor}</p>
-      <p className="mt-2 text-xs text-slate-500">{label}</p>
-    </div>
+      <p className="mt-2 text-xs text-slate-500">{label}{href && valor > 0 ? " →" : ""}</p>
+    </>
   );
+  if (href && valor > 0) {
+    return <Link href={href} className="relative block px-5 py-4 transition hover:bg-slate-50">{contenido}</Link>;
+  }
+  return <div className="relative px-5 py-4">{contenido}</div>;
 }

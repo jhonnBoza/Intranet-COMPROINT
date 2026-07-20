@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Crown, BadgeCheck, Factory, FolderKanban, Truck, Briefcase,
-  LayoutDashboard, ChevronRight, FolderGit2, X, Users, ScrollText, Trash2, type LucideIcon,
+  LayoutDashboard, ChevronRight, FolderGit2, X, Users, ScrollText, Trash2, ClipboardCheck, type LucideIcon,
 } from "lucide-react";
 import type { Area, UsuarioPublico } from "@/types";
 import { puedeGestionarArea, puedeGestionarUsuarios } from "@/lib/permissions";
@@ -34,6 +34,9 @@ export function Sidebar({ areas, user, abierto, onCerrar }: Props) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <Seccion titulo="General" />
           <NavLink href="/dashboard" activo={pathname === "/dashboard"} icon={LayoutDashboard} label="Panel de control" onNavegar={onCerrar} />
+          {user.rol !== "OPERARIO" && (
+            <NavLink href="/pendientes" activo={pathname.startsWith("/pendientes")} icon={ClipboardCheck} label="Pendientes de aprobar" onNavegar={onCerrar} />
+          )}
 
           <Seccion titulo="Repositorio documental" />
           <div className="space-y-0.5">
@@ -149,7 +152,9 @@ function AreaItem({
                 <button
                   onClick={() => eliminarCarpeta(sa.slug, sa.nombre)}
                   title="Eliminar carpeta"
-                  className="mr-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-slate-300 hover:bg-red-50 hover:text-estado-obsoleto group-hover/sa:flex"
+                  aria-label={`Eliminar carpeta ${sa.nombre}`}
+                  // Visible siempre en táctil; en escritorio aparece al pasar el cursor.
+                  className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-300 hover:bg-red-50 hover:text-estado-obsoleto lg:opacity-0 lg:group-hover/sa:opacity-100"
                 >
                   <X size={12} />
                 </button>

@@ -251,12 +251,13 @@ export function AreaRepository({
             <button onClick={() => setSel(new Set())} className="ml-auto text-slate-500 hover:underline">Limpiar</button>
           </div>
         )}
-        <div className="overflow-x-auto">
+        {/* Tabla — escritorio */}
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-2xs uppercase tracking-wide text-slate-500">
                 <th className="w-10 px-4 py-2.5">
-                  <input type="checkbox" checked={todosMarcados} onChange={toggleTodos}
+                  <input type="checkbox" aria-label="Seleccionar todos" checked={todosMarcados} onChange={toggleTodos}
                     className="h-3.5 w-3.5 rounded border-slate-300 accent-slate-800" />
                 </th>
                 <ThSort label="Nombre del archivo" activo={sortKey === "nombre"} dir={sortDir} onClick={() => ordenarPor("nombre")} />
@@ -276,6 +277,14 @@ export function AreaRepository({
             </tbody>
           </table>
         </div>
+
+        {/* Tarjetas — móvil */}
+        <ul className="divide-y divide-slate-100 sm:hidden">
+          {pagina.map((d) => (
+            <TarjetaMovil key={d.id} doc={d} area={area} user={user} seleccionado={sel.has(d.id)} onToggle={() => toggle(d.id)}
+              onVer={setPrevisualizando} onEditar={setEditando} onEliminar={eliminar} />
+          ))}
+        </ul>
 
         {filtrados.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-1.5 py-16 text-center">
@@ -466,6 +475,61 @@ function Fila({
         </div>
       </td>
     </tr>
+  );
+}
+
+function TarjetaMovil({
+  doc, area, user, seleccionado, onToggle, onVer, onEditar, onEliminar,
+}: {
+  doc: Documento; area: Area; user: UsuarioPublico; seleccionado: boolean; onToggle: () => void;
+  onVer: (d: Documento) => void; onEditar: (d: Documento) => void; onEliminar: (d: Documento) => void;
+}) {
+  const acc = accionesSobreDocumento(user, doc);
+  const subarea = area.subareas.find((s) => s.slug === doc.subareaSlug)?.nombre;
+  return (
+    <li className={`px-4 py-3 ${seleccionado ? "bg-slate-50" : ""}`}>
+      <div className="flex items-start gap-3">
+        <input type="checkbox" aria-label={`Seleccionar ${doc.nombre}`} checked={seleccionado} onChange={onToggle}
+          className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 accent-slate-800" />
+        <FileIcon tipo={doc.tipo} size={20} />
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-medium text-slate-800">{doc.nombre}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-slate-500">
+            <StatusBadge estado={doc.estado} />
+            <ConfidentialityBadge nivel={doc.confidencialidad} />
+            <span className="tabular">v{doc.version} · {doc.tamano}</span>
+          </div>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-2xs text-slate-500">
+            {subarea && <span>{subarea}</span>}
+            <span>{doc.autor}</span>
+            <span className="tabular">{formatoFecha(doc.fechaSubida)}</span>
+          </p>
+          {/* Acciones con etiqueta (en táctil no hay hover ni title) */}
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {acc.ver && (
+              <button onClick={() => onVer(doc)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                <Eye size={14} /> Ver
+              </button>
+            )}
+            {acc.descargar && !doc.soloVista && (
+              <a href={`/api/documents/${doc.id}`} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                <Download size={14} /> Descargar
+              </a>
+            )}
+            {acc.editar && (
+              <button onClick={() => onEditar(doc)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                <Pencil size={14} /> Editar
+              </button>
+            )}
+            {acc.eliminar && (
+              <button onClick={() => onEliminar(doc)} className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-estado-obsoleto">
+                <Trash2 size={14} /> Eliminar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 
