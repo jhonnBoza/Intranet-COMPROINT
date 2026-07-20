@@ -7,12 +7,15 @@ import { notificarVencimientos } from "@/server/services/document.service";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  // Fail-closed: sin CRON_SECRET configurado, la ruta no ejecuta nada (evita que
+  // un anónimo dispare notificaciones y escrituras). Vercel Cron envía el
+  // Authorization automáticamente cuando la variable está definida.
   const secreto = process.env.CRON_SECRET;
-  if (secreto) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secreto}`) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+  if (!secreto) {
+    return NextResponse.json({ error: "Cron no configurado (falta CRON_SECRET)." }, { status: 503 });
+  }
+  if (req.headers.get("authorization") !== `Bearer ${secreto}`) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   try {
     const avisados = await notificarVencimientos();

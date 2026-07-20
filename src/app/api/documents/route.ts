@@ -77,8 +77,7 @@ export async function POST(req: Request) {
       doc.areaSlug,
       "Documento pendiente de revisión",
       `${user.nombre} subió “${doc.nombre}”.`,
-      `/area/${doc.areaSlug}`,
-      user.id,
+      { url: `/area/${doc.areaSlug}`, exceptoId: user.id, confidencialidad: doc.confidencialidad },
     );
     return NextResponse.json({ documento: doc }, { status: 201 });
   } catch (e) {

@@ -72,8 +72,8 @@ model Documento {
   @@index([areaSlug, fechaSubida])
   @@index([areaSlug, subareaSlug])
   @@index([proyectoSlug])
+  @@unique([codigo])
   @@index([eliminado])
-  @@index([codigo])
   @@index([fechaProximaRevision])
 }
 

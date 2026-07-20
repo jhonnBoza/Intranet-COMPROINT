@@ -26,25 +26,27 @@ export async function notificarATodos(
 }
 
 /**
- * Notifica a quienes pueden aprobar documentos de un área: el/los Jefe(s) de
- * esa área y la Gerencia General. Se usa al subir un documento nuevo.
+ * Notifica a los aprobadores de un documento: la Gerencia General y, salvo que
+ * el documento sea "restringido" (solo gerencia lo ve), el/los Jefe(s) del área.
+ * Así no se filtra el nombre/código de un documento restringido a quien no
+ * puede verlo. Se usa al subir un documento y al avisar vencimientos.
  */
 export async function notificarAprobadores(
   areaSlug: string,
   titulo: string,
   cuerpo: string,
-  url?: string,
-  exceptoId?: string,
+  opciones: { url?: string; exceptoId?: string; confidencialidad?: string } = {},
 ): Promise<void> {
+  const { url, exceptoId, confidencialidad } = opciones;
   try {
+    const soloGerencia = confidencialidad === "restringido";
     const usuarios = await prisma.usuario.findMany({
       where: {
         activo: true,
         ...(exceptoId ? { id: { not: exceptoId } } : {}),
-        OR: [
-          { rol: "GERENTE_GENERAL" },
-          { rol: "JEFE_AREA", areaSlug },
-        ],
+        OR: soloGerencia
+          ? [{ rol: "GERENTE_GENERAL" }]
+          : [{ rol: "GERENTE_GENERAL" }, { rol: "JEFE_AREA", areaSlug }],
       },
       select: { id: true },
     });

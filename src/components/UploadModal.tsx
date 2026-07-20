@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { UploadCloud, X, Loader2, FolderUp, CheckCircle2, AlertCircle, Trash2, FileText } from "lucide-react";
 import type { Area, Documento } from "@/types";
 import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
-import { PERIODOS_REVISION, sumarMeses } from "@/lib/vigencia";
+import { PERIODOS_REVISION, sumarMeses, hoyISO } from "@/lib/vigencia";
 
 interface Props {
   area: Area;
@@ -89,7 +89,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
   const [confidencialidad, setConfidencialidad] = useState<Documento["confidencialidad"]>("publico");
   const [proyecto, setProyecto] = useState("");
   const [proyectos, setProyectos] = useState<{ slug: string; nombre: string }[]>([]);
-  const [fechaAprobacion, setFechaAprobacion] = useState("");
+  const [fechaAprobacion, setFechaAprobacion] = useState(hoyISO());
   const [periodoRevision, setPeriodoRevision] = useState(0);
   const [soloVista, setSoloVista] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
@@ -264,7 +264,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
   if (!montado) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Subir documentos">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={subiendo ? undefined : onCerrar} />
 
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -277,6 +277,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
           <button
             onClick={onCerrar}
             disabled={subiendo}
+            aria-label="Cerrar"
             className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-40"
           >
             <X size={20} />
@@ -513,7 +514,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
           color: rgb(51 65 85);
           outline: none;
         }
-        .select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
+        .select:focus { border-color: #326a9b; box-shadow: 0 0 0 2px #d8e5f1; }
         .select:disabled { background: rgb(248 250 252); color: rgb(148 163 184); }
       `}</style>
     </div>,

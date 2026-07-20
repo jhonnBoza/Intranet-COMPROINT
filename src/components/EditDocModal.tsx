@@ -143,7 +143,7 @@ export function EditDocModal({
             <Pencil size={17} className="text-slate-500" />
             <h3 className="text-base font-semibold text-slate-800">Editar documento</h3>
           </div>
-          <button onClick={onCerrar} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100">
+          <button onClick={onCerrar} aria-label="Cerrar" className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100">
             <X size={19} />
           </button>
         </div>

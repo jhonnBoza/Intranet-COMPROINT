@@ -13,11 +13,14 @@ export function hoyISO(base = new Date()): string {
   return base.toISOString().slice(0, 10);
 }
 
-/** Suma meses a una fecha YYYY-MM-DD y devuelve YYYY-MM-DD. */
+/** Suma meses a una fecha YYYY-MM-DD y devuelve YYYY-MM-DD (acota a fin de mes). */
 export function sumarMeses(fecha: string, meses: number): string {
   const [a, m, d] = fecha.split("-").map(Number);
   const dt = new Date(Date.UTC(a, m - 1, d));
   dt.setUTCMonth(dt.getUTCMonth() + meses);
+  // Si el día se desbordó al mes siguiente (ej. 31-ene + 1 mes → 3-mar),
+  // retrocedemos al último día del mes objetivo (28-feb).
+  if (dt.getUTCDate() !== d) dt.setUTCDate(0);
   return dt.toISOString().slice(0, 10);
 }
 

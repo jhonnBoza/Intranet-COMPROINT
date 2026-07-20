@@ -17,6 +17,7 @@ export function ApprovalPanel({ documentosIniciales }: { documentosIniciales: Do
   const [previsualizando, setPrevisualizando] = useState<Documento | null>(null);
 
   async function decidir(doc: Documento, estado: "vigente" | "obsoleto") {
+    if (estado === "obsoleto" && !confirm(`¿Rechazar "${doc.nombre}"? Quedará marcado como obsoleto.`)) return;
     setOcupado(doc.id);
     const res = await fetch(`/api/documents/${doc.id}`, {
       method: "PATCH",

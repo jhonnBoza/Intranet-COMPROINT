@@ -207,7 +207,7 @@ export async function notificarVencimientos(): Promise<number> {
       avisoVencimiento: false,
       fechaProximaRevision: { not: null, lte: en30 },
     },
-    select: { id: true, codigo: true, nombre: true, areaSlug: true, fechaProximaRevision: true },
+    select: { id: true, codigo: true, nombre: true, areaSlug: true, fechaProximaRevision: true, confidencialidad: true },
   });
   for (const d of pendientes) {
     const etiqueta = d.codigo ? `${d.codigo} — ${d.nombre}` : d.nombre;
@@ -215,7 +215,7 @@ export async function notificarVencimientos(): Promise<number> {
       d.areaSlug,
       "Documento por revisar",
       `“${etiqueta}” debe revisarse antes del ${d.fechaProximaRevision}.`,
-      `/vencimientos`,
+      { url: `/vencimientos`, confidencialidad: d.confidencialidad },
     );
     await prisma.documento.update({ where: { id: d.id }, data: { avisoVencimiento: true } });
   }
@@ -328,7 +328,17 @@ export async function crearDocumento(
   let storagePath: string | null = null;
 
   if (data.storagePath) {
-    // Subida directa: el archivo ya está en Storage; verificamos que exista.
+    // Subida directa. El path DEBE ser uno emitido por urlSubidaDirecta para
+    // esta área (formato "<area>/f-...") — así el cliente no puede apuntar al
+    // archivo de otro documento (evita bypass de confidencialidad).
+    if (!data.storagePath.startsWith(`${data.areaSlug}/f-`)) {
+      throw new Error("Ruta de archivo inválida.");
+    }
+    const yaUsado = await prisma.documento.findFirst({
+      where: { storagePath: data.storagePath },
+      select: { id: true },
+    });
+    if (yaUsado) throw new Error("Ese archivo ya está registrado en otro documento.");
     if (!(await existeArchivo(data.storagePath))) {
       throw new Error("El archivo no se subió correctamente. Vuelve a intentarlo.");
     }
@@ -339,35 +349,44 @@ export async function crearDocumento(
     await subirArchivo(storagePath, Buffer.from(data.contenidoBase64, "base64"), mime);
   }
 
-  const codigo = await siguienteCodigo(data.areaSlug, data.categoria);
   const fechaProximaRevision = calcularProximaRevision(data.fechaAprobacion, data.periodoRevisionMeses);
+  const datosComunes = {
+    id,
+    nombre: data.nombre,
+    tipo: data.tipo,
+    categoria: data.categoria,
+    areaSlug: data.areaSlug,
+    subareaSlug: data.subareaSlug,
+    fechaSubida: new Date().toISOString(),
+    autor: user.nombre,
+    estado: "revision",
+    confidencialidad: data.confidencialidad,
+    version: "1.0",
+    tamano: data.tamano || "—",
+    proyectoSlug: data.proyectoSlug ?? null,
+    storagePath,
+    mime: storagePath ? mime : null,
+    soloVista: !!data.soloVista,
+    fechaAprobacion: data.fechaAprobacion ?? null,
+    periodoRevisionMeses: data.periodoRevisionMeses ?? null,
+    fechaProximaRevision,
+  };
 
   try {
-    const doc = await prisma.documento.create({
-      data: {
-        id,
-        codigo,
-        nombre: data.nombre,
-        tipo: data.tipo,
-        categoria: data.categoria,
-        areaSlug: data.areaSlug,
-        subareaSlug: data.subareaSlug,
-        fechaSubida: new Date().toISOString(),
-        autor: user.nombre,
-        estado: "revision",
-        confidencialidad: data.confidencialidad,
-        version: "1.0",
-        tamano: data.tamano || "—",
-        proyectoSlug: data.proyectoSlug ?? null,
-        storagePath,
-        mime: storagePath ? mime : null,
-        soloVista: !!data.soloVista,
-        fechaAprobacion: data.fechaAprobacion ?? null,
-        periodoRevisionMeses: data.periodoRevisionMeses ?? null,
-        fechaProximaRevision,
-      },
-    });
-    return limpiar(doc);
+    // El código correlativo tiene @@unique. Bajo subida en paralelo dos hilos
+    // pueden calcular el mismo número; el unique lo rechaza (P2002) y aquí
+    // reintentamos con el siguiente número, evitando códigos duplicados.
+    for (let intento = 0; intento < 6; intento++) {
+      const codigo = await siguienteCodigo(data.areaSlug, data.categoria);
+      try {
+        const doc = await prisma.documento.create({ data: { ...datosComunes, codigo } });
+        return limpiar(doc);
+      } catch (e: any) {
+        if (e?.code === "P2002" && intento < 5) continue; // colisión de código: reintentar
+        throw e;
+      }
+    }
+    throw new Error("No se pudo asignar un código único. Intenta de nuevo.");
   } catch (e) {
     // Si el insert falla, no dejamos el archivo huérfano en Storage.
     if (storagePath) {
@@ -597,6 +616,16 @@ export async function reemplazarArchivo(
 
   // 1) Colocar el archivo nuevo ANTES de tocar la BD.
   if (data.storagePath) {
+    // El path debe ser una subida directa reciente del área del documento
+    // (evita repuntar la versión al archivo de otro documento).
+    if (!data.storagePath.startsWith(`${doc.areaSlug}/f-`)) {
+      throw new Error("Ruta de archivo inválida.");
+    }
+    const yaUsado = await prisma.documento.findFirst({
+      where: { storagePath: data.storagePath, NOT: { id } },
+      select: { id: true },
+    });
+    if (yaUsado) throw new Error("Ese archivo ya está registrado en otro documento.");
     if (!(await existeArchivo(data.storagePath))) {
       throw new Error("El archivo no se subió correctamente. Vuelve a intentarlo.");
     }
