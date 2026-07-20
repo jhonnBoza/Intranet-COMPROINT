@@ -552,6 +552,7 @@ export async function eliminarDefinitivo(
   // Primero la BD (en transacción); si algo falla, no perdemos los archivos.
   await prisma.$transaction([
     prisma.documentoVersion.deleteMany({ where: { documentoId: id } }),
+    prisma.acuseLectura.deleteMany({ where: { documentoId: id } }),
     prisma.documento.delete({ where: { id } }),
   ]);
   // Ya sin referencias: borramos los archivos (huérfano barato si esto falla).
@@ -579,6 +580,7 @@ export async function vaciarPapelera(user: UsuarioPublico): Promise<number> {
   // Primero la BD (transacción); luego los archivos (huérfano barato si falla).
   await prisma.$transaction([
     prisma.documentoVersion.deleteMany({ where: { documentoId: { in: ids } } }),
+    prisma.acuseLectura.deleteMany({ where: { documentoId: { in: ids } } }),
     prisma.documento.deleteMany({ where: { id: { in: ids } } }),
   ]);
   try { await borrarArchivos(rutas); } catch { /* best-effort */ }
