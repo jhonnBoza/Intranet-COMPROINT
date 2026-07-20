@@ -28,7 +28,7 @@ export function VencimientosPanel({ documentosIniciales }: { documentosIniciales
         {docs.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-14 text-slate-500">
             <CheckCircle2 size={34} className="text-estado-vigente" />
-            <p className="text-sm">Nada por vencer. Toda la documentación al día. 👍</p>
+            <p className="text-sm">Nada por vencer. Toda la documentación al día.</p>
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
