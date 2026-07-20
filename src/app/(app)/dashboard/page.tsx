@@ -100,7 +100,10 @@ export default async function DashboardPage() {
                     <td className="px-4 py-2.5">
                       <Link href={`/area/${d.areaSlug}`} className="flex items-center gap-2.5">
                         <FileIcon tipo={d.tipo} size={16} />
-                        <span className="max-w-[280px] truncate font-medium text-slate-700 hover:text-ink-900">{d.nombre}</span>
+                        <span className="min-w-0">
+                          {d.codigo && <span className="mr-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-2xs font-semibold tabular text-brand-700">{d.codigo}</span>}
+                          <span className="font-medium text-slate-700 hover:text-ink-900">{d.nombre}</span>
+                        </span>
                       </Link>
                     </td>
                     <td className="hidden px-4 py-2.5 text-slate-500 sm:table-cell">{d.autor}</td>

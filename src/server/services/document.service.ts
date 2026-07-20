@@ -40,6 +40,37 @@ function nuevoId(prefijo: string): string {
   return `${prefijo}-${randomUUID().slice(0, 12)}`;
 }
 
+// ---- Código correlativo ISO (ej. CAL-PRC-001) --------------------------
+const ABBR_AREA: Record<string, string> = {
+  gerencia: "GER", calidad: "CAL", produccion: "PRD",
+  proyectos: "PRY", logistica: "LOG", administracion: "ADM",
+};
+const ABBR_TIPO: Record<string, string> = {
+  Procedimiento: "PRC", Formato: "FOR", Manual: "MAN",
+  Registro: "REG", Plano: "PLA", Reporte: "RPT",
+};
+const abrevArea = (s: string) => ABBR_AREA[s] ?? s.slice(0, 3).toUpperCase();
+const abrevTipo = (c: string) => ABBR_TIPO[c] ?? c.slice(0, 3).toUpperCase();
+
+/**
+ * Genera el siguiente código correlativo para un área+categoría, tomando el
+ * mayor número existente + 1. Cuenta también los de la papelera para no
+ * reutilizar un número ya asignado.
+ */
+async function siguienteCodigo(areaSlug: string, categoria: string): Promise<string> {
+  const prefijo = `${abrevArea(areaSlug)}-${abrevTipo(categoria)}-`;
+  const existentes = await prisma.documento.findMany({
+    where: { codigo: { startsWith: prefijo } },
+    select: { codigo: true },
+  });
+  let max = 0;
+  for (const d of existentes) {
+    const m = /-(\d+)$/.exec(d.codigo ?? "");
+    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n; }
+  }
+  return `${prefijo}${String(max + 1).padStart(3, "0")}`;
+}
+
 /** Filtro de visibilidad en SQL (excluye lo que el usuario no puede ver). */
 function whereVisible(user: UsuarioPublico): Record<string, unknown> {
   if (esGlobal(user)) return {};
@@ -118,7 +149,7 @@ export async function buscarGlobal(
       where: {
         ...whereVisible(user),
         eliminado: false,
-        OR: [{ nombre: contains }, { autor: contains }, { categoria: contains }],
+        OR: [{ nombre: contains }, { autor: contains }, { categoria: contains }, { codigo: contains }],
       },
       orderBy: { fechaSubida: "desc" },
       take: 10,
@@ -233,10 +264,13 @@ export async function crearDocumento(
     await subirArchivo(storagePath, Buffer.from(data.contenidoBase64, "base64"), mime);
   }
 
+  const codigo = await siguienteCodigo(data.areaSlug, data.categoria);
+
   try {
     const doc = await prisma.documento.create({
       data: {
         id,
+        codigo,
         nombre: data.nombre,
         tipo: data.tipo,
         categoria: data.categoria,

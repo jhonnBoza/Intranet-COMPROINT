@@ -52,7 +52,10 @@ export function ApprovalPanel({ documentosIniciales }: { documentosIniciales: Do
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <FileIcon tipo={d.tipo} size={18} />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-800">{d.nombre}</p>
+                    <p className="truncate text-sm font-medium text-slate-800">
+                      {d.codigo && <span className="mr-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-2xs font-semibold tabular text-brand-700">{d.codigo}</span>}
+                      {d.nombre}
+                    </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                       <span>{NOMBRE_AREA[d.areaSlug] ?? d.areaSlug}</span>
                       <span className="text-slate-300">·</span>

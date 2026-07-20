@@ -45,6 +45,7 @@ model SubArea {
 
 model Documento {
   id               String  @id
+  codigo           String? // código correlativo ISO (ej. CAL-PRC-001), generado por la app
   nombre           String
   tipo             String
   categoria        String
@@ -68,6 +69,7 @@ model Documento {
   @@index([areaSlug, subareaSlug])
   @@index([proyectoSlug])
   @@index([eliminado])
+  @@index([codigo])
 }
 
 model Proyecto {

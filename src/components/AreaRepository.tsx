@@ -453,7 +453,8 @@ function Fila({
           <div className="min-w-0">
             <p className="max-w-xs truncate font-medium text-slate-700">{doc.nombre}</p>
             <div className="mt-0.5 flex items-center gap-2">
-              <span className="text-2xs tabular text-slate-400">v{doc.version} · {doc.tamano}</span>
+              {doc.codigo && <span className="rounded bg-brand-50 px-1.5 py-0.5 text-2xs font-semibold tabular text-brand-700">{doc.codigo}</span>}
+              <span className="text-2xs tabular text-slate-500">v{doc.version} · {doc.tamano}</span>
               <ConfidentialityBadge nivel={doc.confidencialidad} />
             </div>
           </div>
@@ -493,6 +494,7 @@ function TarjetaMovil({
           className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 accent-slate-800" />
         <FileIcon tipo={doc.tipo} size={20} />
         <div className="min-w-0 flex-1">
+          {doc.codigo && <span className="mb-0.5 inline-block rounded bg-brand-50 px-1.5 py-0.5 text-2xs font-semibold tabular text-brand-700">{doc.codigo}</span>}
           <p className="break-words text-sm font-medium text-slate-800">{doc.nombre}</p>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-slate-500">
             <StatusBadge estado={doc.estado} />

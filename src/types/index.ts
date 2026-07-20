@@ -49,6 +49,7 @@ export interface Usuario {
 /** Documento almacenado. */
 export interface Documento {
   id: string;
+  codigo?: string | null; // código correlativo ISO (ej. CAL-PRC-001), generado por la app
   nombre: string;
   tipo: TipoArchivo;
   categoria: "Procedimiento" | "Formato" | "Manual" | "Registro" | "Plano" | "Reporte";

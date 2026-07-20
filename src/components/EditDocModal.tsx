@@ -147,7 +147,10 @@ export function EditDocModal({
           <div>
             <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-slate-700">
               <span>Nombre del archivo</span>
-              <span className="shrink-0 rounded bg-brand-50 px-2 py-0.5 text-2xs font-medium text-brand-700">v{doc.version}</span>
+              <span className="flex shrink-0 items-center gap-1.5">
+                {doc.codigo && <span className="rounded bg-brand-50 px-2 py-0.5 text-2xs font-semibold tabular text-brand-700">{doc.codigo}</span>}
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-2xs font-medium text-slate-600">v{doc.version}</span>
+              </span>
             </label>
             <input value={nombre} onChange={(e) => setNombre(e.target.value)} className="field-select w-full" />
           </div>
