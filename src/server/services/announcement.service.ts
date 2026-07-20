@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { getArea } from "@/server/data/areas";
-import { puedePublicarAnuncios } from "@/lib/permissions";
+import { puedePublicarAnuncios, puedeGestionarUsuarios } from "@/lib/permissions";
 import { notificarATodos } from "@/server/services/notification.service";
 import type { Anuncio, UsuarioPublico } from "@/types";
 
@@ -12,8 +12,15 @@ import type { Anuncio, UsuarioPublico } from "@/types";
 
 const asAnuncios = (rows: unknown): Anuncio[] => rows as Anuncio[];
 
-export async function listarAnuncios(): Promise<Anuncio[]> {
-  return asAnuncios(await prisma.anuncio.findMany({ orderBy: { fecha: "desc" } }));
+/** Lista los anuncios más recientes (limitado; no se traen todos). */
+export async function listarAnuncios(limite = 15): Promise<Anuncio[]> {
+  return asAnuncios(await prisma.anuncio.findMany({ orderBy: { fecha: "desc" }, take: limite }));
+}
+
+/** Elimina un anuncio (solo Gerencia). */
+export async function eliminarAnuncio(user: UsuarioPublico, id: string): Promise<void> {
+  if (!puedeGestionarUsuarios(user)) throw new Error("Sin permiso para eliminar anuncios.");
+  await prisma.anuncio.delete({ where: { id } });
 }
 
 export interface NuevoAnuncio {

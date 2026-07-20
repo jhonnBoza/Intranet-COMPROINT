@@ -78,3 +78,16 @@ export async function eliminarNotificaciones(user: UsuarioPublico): Promise<numb
   const r = await prisma.notificacion.deleteMany({ where: { usuarioId: user.id } });
   return r.count;
 }
+
+/**
+ * Purga notificaciones LEÍDAS con más de N días (por defecto 60). Evita que la
+ * tabla crezca sin límite. Pensada para el cron diario.
+ */
+export async function purgarNotificaciones(dias = 60): Promise<number> {
+  const corte = new Date();
+  corte.setUTCDate(corte.getUTCDate() - dias);
+  const r = await prisma.notificacion.deleteMany({
+    where: { leida: true, fecha: { lt: corte.toISOString() } },
+  });
+  return r.count;
+}

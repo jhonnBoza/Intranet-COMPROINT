@@ -1,23 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { Megaphone, Plus, X, Loader2, AlertTriangle } from "lucide-react";
+import { Megaphone, Plus, X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
 import type { Anuncio } from "@/types";
 import { formatoFecha } from "@/lib/format";
+import { useConfirm, useToast } from "./Feedback";
 
 export function AnnouncementsPanel({
   anunciosIniciales,
   puedePublicar,
+  puedeEliminar,
 }: {
   anunciosIniciales: Anuncio[];
   puedePublicar: boolean;
+  puedeEliminar?: boolean;
 }) {
   const [anuncios, setAnuncios] = useState(anunciosIniciales);
   const [modal, setModal] = useState(false);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   function onCreado(a: Anuncio) {
     setAnuncios((prev) => [a, ...prev]);
     setModal(false);
+  }
+
+  async function eliminar(a: Anuncio) {
+    const ok = await confirm({
+      titulo: "Eliminar anuncio",
+      mensaje: `“${a.titulo}” dejará de mostrarse a todos. Esta acción no se puede deshacer.`,
+      confirmar: "Eliminar",
+      peligro: true,
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/announcements/${a.id}`, { method: "DELETE" });
+    if (res.ok) { setAnuncios((prev) => prev.filter((x) => x.id !== a.id)); toast("Anuncio eliminado."); }
+    else { const d = await res.json().catch(() => ({})); toast(d.error ?? "No se pudo eliminar.", "error"); }
   }
 
   return (
@@ -43,12 +61,21 @@ export function AnnouncementsPanel({
             className={`relative p-3.5 ${i > 0 ? "border-t border-slate-100" : ""} ${i === 0 ? "pl-4" : ""}`}
           >
             {i === 0 && <span className="absolute inset-y-0 left-0 w-0.5 bg-gold-400" />}
-            <div className="flex items-center gap-2">
-              <p className="text-[13px] font-medium text-slate-800">{a.titulo}</p>
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 flex-1 text-[13px] font-medium text-slate-800">{a.titulo}</p>
               {a.prioridad === "alta" && (
-                <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-2xs font-medium text-estado-revision">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-2xs font-medium text-estado-revision">
                   <AlertTriangle size={10} /> Alta
                 </span>
+              )}
+              {puedeEliminar && (
+                <button
+                  onClick={() => eliminar(a)}
+                  aria-label="Eliminar anuncio"
+                  className="shrink-0 rounded p-0.5 text-slate-300 hover:bg-red-50 hover:text-estado-obsoleto"
+                >
+                  <Trash2 size={13} />
+                </button>
               )}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">{a.cuerpo}</p>

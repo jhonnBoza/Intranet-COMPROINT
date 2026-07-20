@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { notificarVencimientos } from "@/server/services/document.service";
+import { purgarNotificaciones } from "@/server/services/notification.service";
 
 // Cron diario: avisa a los aprobadores los documentos por vencer / vencidos.
 // Vercel invoca esta ruta según vercel.json. Si CRON_SECRET está configurado,
@@ -19,7 +20,8 @@ export async function GET(req: Request) {
   }
   try {
     const avisados = await notificarVencimientos();
-    return NextResponse.json({ ok: true, avisados });
+    const purgadas = await purgarNotificaciones();
+    return NextResponse.json({ ok: true, avisados, purgadas });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

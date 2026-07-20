@@ -31,25 +31,53 @@ export function Header({
   const menuRef = useRef<HTMLDivElement>(null);
   const notiRef = useRef<HTMLDivElement>(null);
 
-  // Trae notificaciones al montar y cada 60s.
+  // Trae notificaciones al montar y cada 2 min, pero SOLO con la pestaña visible
+  // (no gasta recursos en segundo plano) y se detiene si la sesión expira.
   useEffect(() => {
     let vivo = true;
+    let iv: ReturnType<typeof setInterval> | null = null;
+
     async function cargar() {
+      if (document.hidden) return; // pestaña oculta: no consultamos
       const res = await fetch("/api/notifications");
-      if (!res.ok || !vivo) return;
+      if (!vivo) return;
+      if (res.status === 401) { if (iv) clearInterval(iv); iv = null; return; } // sesión expirada
+      if (!res.ok) return;
       const d = await res.json();
       setNotis(d.items ?? []);
       setNoLeidas(d.noLeidas ?? 0);
     }
+
+    function iniciar() {
+      if (!iv) iv = setInterval(cargar, 120000);
+    }
+    // Al volver a la pestaña, refresca una vez y reanuda el intervalo.
+    function alVisibilidad() {
+      if (!document.hidden) { cargar(); iniciar(); }
+    }
+
     cargar();
-    const iv = setInterval(cargar, 60000);
-    return () => { vivo = false; clearInterval(iv); };
+    iniciar();
+    document.addEventListener("visibilitychange", alVisibilidad);
+    return () => {
+      vivo = false;
+      if (iv) clearInterval(iv);
+      document.removeEventListener("visibilitychange", alVisibilidad);
+    };
   }, []);
 
   async function abrirNotis() {
     const abrir = !notiAbierto;
     setNotiAbierto(abrir);
-    if (abrir && noLeidas > 0) {
+    if (!abrir) return;
+    // Recarga fresca ANTES de marcar leídas, para no marcar como vista una
+    // notificación recién llegada que aún no aparece en la lista.
+    const res = await fetch("/api/notifications");
+    if (res.ok) {
+      const d = await res.json();
+      setNotis(d.items ?? []);
+    }
+    if (noLeidas > 0) {
       setNoLeidas(0);
       setNotis((prev) => prev.map((n) => ({ ...n, leida: true })));
       await fetch("/api/notifications", { method: "PATCH" });
