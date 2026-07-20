@@ -84,6 +84,7 @@ export interface Anuncio {
   fecha: string;
   autor: string;
   prioridad: "alta" | "normal";
+  areaSlug?: string | null; // null = toda la empresa
 }
 
 /** Usuario sin la contraseña — lo que viaja al cliente. */

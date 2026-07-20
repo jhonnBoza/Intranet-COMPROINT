@@ -85,12 +85,13 @@ model Proyecto {
 }
 
 model Anuncio {
-  id        String @id
+  id        String  @id
   titulo    String
   cuerpo    String
   fecha     String
   autor     String
   prioridad String
+  areaSlug  String? // null = anuncio para toda la empresa (Gerencia); si no, solo esa área
 }
 
 // Bitácora de auditoría — quién hizo qué y cuándo (trazabilidad ISO 9001).

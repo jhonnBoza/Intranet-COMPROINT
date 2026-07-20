@@ -1,25 +1,39 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { getArea } from "@/server/data/areas";
-import { puedePublicarAnuncios, puedeGestionarUsuarios } from "@/lib/permissions";
-import { notificarATodos } from "@/server/services/notification.service";
+import { puedePublicarAnuncios, esGlobal } from "@/lib/permissions";
+import { notificarATodos, notificarUsuariosDeArea } from "@/server/services/notification.service";
 import type { Anuncio, UsuarioPublico } from "@/types";
 
 // ============================================================
 //  SERVICIO DE ANUNCIOS — capa de negocio (Prisma / Supabase).
-//  Publicar valida permiso (Gerencia / Jefes de Área).
+//  Gerencia publica para toda la empresa; un Jefe, solo para su área.
 // ============================================================
 
 const asAnuncios = (rows: unknown): Anuncio[] => rows as Anuncio[];
 
-/** Lista los anuncios más recientes (limitado; no se traen todos). */
-export async function listarAnuncios(limite = 15): Promise<Anuncio[]> {
-  return asAnuncios(await prisma.anuncio.findMany({ orderBy: { fecha: "desc" }, take: limite }));
+/**
+ * Lista los anuncios visibles para el usuario (los de toda la empresa + los de
+ * su propia área). La Gerencia ve todos.
+ */
+export async function listarAnuncios(user?: UsuarioPublico, limite = 15): Promise<Anuncio[]> {
+  const where =
+    !user || esGlobal(user)
+      ? {}
+      : { OR: [{ areaSlug: null }, { areaSlug: user.areaSlug ?? "__sin_area__" }] };
+  return asAnuncios(
+    await prisma.anuncio.findMany({ where, orderBy: { fecha: "desc" }, take: limite }),
+  );
 }
 
-/** Elimina un anuncio (solo Gerencia). */
+/** Elimina un anuncio (Gerencia cualquiera; un Jefe, solo los de su área). */
 export async function eliminarAnuncio(user: UsuarioPublico, id: string): Promise<void> {
-  if (!puedeGestionarUsuarios(user)) throw new Error("Sin permiso para eliminar anuncios.");
+  const anuncio = await prisma.anuncio.findUnique({ where: { id } });
+  if (!anuncio) throw new Error("Anuncio no encontrado.");
+  const puede =
+    esGlobal(user) ||
+    (user.rol === "JEFE_AREA" && anuncio.areaSlug === user.areaSlug && anuncio.areaSlug !== null);
+  if (!puede) throw new Error("Sin permiso para eliminar este anuncio.");
   await prisma.anuncio.delete({ where: { id } });
 }
 
@@ -45,6 +59,9 @@ export async function crearAnuncio(
   if (!data.titulo?.trim() || !data.cuerpo?.trim()) {
     throw new Error("El anuncio requiere título y contenido.");
   }
+  // Gerencia → anuncio para toda la empresa (areaSlug null). Jefe → su área.
+  const areaSlug = esGlobal(user) ? null : user.areaSlug ?? null;
+
   const anuncio = await prisma.anuncio.create({
     data: {
       id: `a-${randomUUID().slice(0, 12)}`,
@@ -53,9 +70,15 @@ export async function crearAnuncio(
       fecha: new Date().toISOString(),
       autor: emisor(user),
       prioridad: data.prioridad === "alta" ? "alta" : "normal",
+      areaSlug,
     },
   });
-  // Notifica a todos (menos al autor) sobre el nuevo anuncio.
-  await notificarATodos(`Nuevo anuncio: ${anuncio.titulo}`, anuncio.cuerpo, "/dashboard", user.id);
+  // Notifica según el alcance: toda la empresa, o solo el área (+ Gerencia).
+  const titulo = `Nuevo anuncio: ${anuncio.titulo}`;
+  if (areaSlug) {
+    await notificarUsuariosDeArea(areaSlug, titulo, anuncio.cuerpo, "/dashboard", user.id);
+  } else {
+    await notificarATodos(titulo, anuncio.cuerpo, "/dashboard", user.id);
+  }
   return anuncio as unknown as Anuncio;
 }

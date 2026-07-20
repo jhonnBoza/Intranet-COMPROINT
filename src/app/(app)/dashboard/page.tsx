@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { getUsuarioActual } from "@/lib/session";
 import { AREAS } from "@/server/data/areas";
-import { areasVisibles, puedePublicarAnuncios, puedeGestionarUsuarios } from "@/lib/permissions";
+import { areasVisibles, puedePublicarAnuncios } from "@/lib/permissions";
 import { documentosRecientes, contarDocumentos, contarDocumentosPorArea, contarVencimientos } from "@/server/services/document.service";
 import { listarAnuncios } from "@/server/services/announcement.service";
 import { FileIcon } from "@/components/FileIcon";
@@ -25,7 +25,7 @@ export default async function DashboardPage() {
     contarDocumentos(user),
     contarDocumentosPorArea(user),
     documentosRecientes(user, 6),
-    listarAnuncios(),
+    listarAnuncios(user),
     contarVencimientos(user),
   ]);
 
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <AnnouncementsPanel anunciosIniciales={anuncios} puedePublicar={puedePublicarAnuncios(user)} puedeEliminar={puedeGestionarUsuarios(user)} />
+        <AnnouncementsPanel anunciosIniciales={anuncios} puedePublicar={puedePublicarAnuncios(user)} usuario={{ rol: user.rol, areaSlug: user.areaSlug }} />
       </div>
     </div>
   );

@@ -2,23 +2,31 @@
 
 import { useState } from "react";
 import { Megaphone, Plus, X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
-import type { Anuncio } from "@/types";
+import type { Anuncio, UsuarioPublico } from "@/types";
 import { formatoFecha } from "@/lib/format";
+import { AREAS } from "@/server/data/areas";
 import { useConfirm, useToast } from "./Feedback";
+
+const NOMBRE_AREA: Record<string, string> = Object.fromEntries(AREAS.map((a) => [a.slug, a.nombre]));
 
 export function AnnouncementsPanel({
   anunciosIniciales,
   puedePublicar,
-  puedeEliminar,
+  usuario,
 }: {
   anunciosIniciales: Anuncio[];
   puedePublicar: boolean;
-  puedeEliminar?: boolean;
+  usuario: Pick<UsuarioPublico, "rol" | "areaSlug">;
 }) {
   const [anuncios, setAnuncios] = useState(anunciosIniciales);
   const [modal, setModal] = useState(false);
   const confirm = useConfirm();
   const toast = useToast();
+
+  // Gerencia borra cualquiera; un Jefe, solo los de su propia área.
+  const puedeBorrar = (a: Anuncio) =>
+    usuario.rol === "GERENTE_GENERAL" ||
+    (usuario.rol === "JEFE_AREA" && !!a.areaSlug && a.areaSlug === usuario.areaSlug);
 
   function onCreado(a: Anuncio) {
     setAnuncios((prev) => [a, ...prev]);
@@ -68,7 +76,7 @@ export function AnnouncementsPanel({
                   <AlertTriangle size={10} /> Alta
                 </span>
               )}
-              {puedeEliminar && (
+              {puedeBorrar(a) && (
                 <button
                   onClick={() => eliminar(a)}
                   aria-label="Eliminar anuncio"
@@ -79,7 +87,10 @@ export function AnnouncementsPanel({
               )}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">{a.cuerpo}</p>
-            <p className="mt-2 text-2xs uppercase tracking-wide text-slate-400">
+            <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-2xs uppercase tracking-wide text-slate-400">
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium normal-case tracking-normal text-slate-500">
+                {a.areaSlug ? NOMBRE_AREA[a.areaSlug] ?? a.areaSlug : "General"}
+              </span>
               {a.autor} · {formatoFecha(a.fecha)}
             </p>
           </article>

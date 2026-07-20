@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Menu, Search, Bell, LogOut, ChevronDown, LifeBuoy } from "lucide-react";
+import { Menu, Search, Bell, LogOut, ChevronDown, LifeBuoy, X } from "lucide-react";
 import type { UsuarioPublico, Documento } from "@/types";
 import { ETIQUETA_ROL } from "@/lib/permissions";
 import { tiempoRelativo } from "@/lib/format";
@@ -88,6 +88,13 @@ export function Header({
     setNotis([]);
     setNoLeidas(0);
     await fetch("/api/notifications", { method: "DELETE" });
+  }
+
+  async function borrarUna(id: string) {
+    const n = notis.find((x) => x.id === id);
+    setNotis((prev) => prev.filter((x) => x.id !== id));
+    if (n && !n.leida) setNoLeidas((v) => Math.max(0, v - 1));
+    await fetch(`/api/notifications/${id}`, { method: "DELETE" });
   }
 
   useEffect(() => {
@@ -197,15 +204,23 @@ export function Header({
                   <p className="px-4 py-6 text-center text-sm text-slate-400">No tienes notificaciones.</p>
                 )}
                 {notis.map((n) => (
-                  <button
-                    key={n.id}
-                    onClick={() => { setNotiAbierto(false); if (n.url) router.push(n.url); }}
-                    className="flex w-full flex-col items-start gap-0.5 border-b border-slate-100 px-4 py-2.5 text-left last:border-0 hover:bg-slate-50"
-                  >
-                    <span className="text-[13px] font-medium text-slate-800">{n.titulo}</span>
-                    <span className="line-clamp-2 text-xs text-slate-500">{n.cuerpo}</span>
-                    <span className="text-2xs uppercase tracking-wide text-slate-400">{tiempoRelativo(n.fecha)}</span>
-                  </button>
+                  <div key={n.id} className="group relative border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                    <button
+                      onClick={() => { setNotiAbierto(false); if (n.url) router.push(n.url); }}
+                      className="flex w-full flex-col items-start gap-0.5 px-4 py-2.5 pr-9 text-left"
+                    >
+                      <span className="text-[13px] font-medium text-slate-800">{n.titulo}</span>
+                      <span className="line-clamp-2 text-xs text-slate-500">{n.cuerpo}</span>
+                      <span className="text-2xs uppercase tracking-wide text-slate-400">{tiempoRelativo(n.fecha)}</span>
+                    </button>
+                    <button
+                      onClick={() => borrarUna(n.id)}
+                      aria-label="Borrar notificación"
+                      className="absolute right-2 top-2.5 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-estado-obsoleto focus:opacity-100 group-hover:opacity-100"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

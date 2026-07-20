@@ -58,6 +58,31 @@ export async function notificarAprobadores(
   } catch { /* la notificación no debe romper la operación */ }
 }
 
+/** Notifica a los usuarios de un área (más la Gerencia, que ve todo). */
+export async function notificarUsuariosDeArea(
+  areaSlug: string,
+  titulo: string,
+  cuerpo: string,
+  url?: string,
+  exceptoId?: string,
+): Promise<void> {
+  try {
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        activo: true,
+        ...(exceptoId ? { id: { not: exceptoId } } : {}),
+        OR: [{ areaSlug }, { rol: "GERENTE_GENERAL" }],
+      },
+      select: { id: true },
+    });
+    if (usuarios.length === 0) return;
+    const fecha = new Date().toISOString();
+    await prisma.notificacion.createMany({
+      data: usuarios.map((u) => ({ usuarioId: u.id, titulo, cuerpo, url: url ?? null, fecha })),
+    });
+  } catch { /* la notificación no debe romper la operación */ }
+}
+
 export async function listarNotificaciones(user: UsuarioPublico) {
   const [items, noLeidas] = await Promise.all([
     prisma.notificacion.findMany({ where: { usuarioId: user.id }, orderBy: { fecha: "desc" }, take: 20 }),
@@ -77,6 +102,11 @@ export async function marcarLeidas(user: UsuarioPublico): Promise<void> {
 export async function eliminarNotificaciones(user: UsuarioPublico): Promise<number> {
   const r = await prisma.notificacion.deleteMany({ where: { usuarioId: user.id } });
   return r.count;
+}
+
+/** Borra UNA notificación del usuario (solo si es suya). */
+export async function eliminarNotificacion(user: UsuarioPublico, id: string): Promise<void> {
+  await prisma.notificacion.deleteMany({ where: { id, usuarioId: user.id } });
 }
 
 /**
