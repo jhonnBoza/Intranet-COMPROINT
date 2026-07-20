@@ -110,6 +110,7 @@ export const documentoNuevoSchema = z.object({
   soloVista: z.boolean().nullish(),
   fechaAprobacion: fechaOpcional,
   periodoRevisionMeses: periodoRevision,
+  requiereAcuse: z.boolean().nullish(),
 });
 
 /** POST /api/documents/upload-url — pide una URL firmada de subida directa. */
@@ -128,6 +129,7 @@ export const documentoEdicionSchema = z
     proyectoSlug: slugOpcional,
     fechaAprobacion: fechaOpcional,
     periodoRevisionMeses: periodoRevision,
+    requiereAcuse: z.boolean().optional(),
   })
   .refine(
     (d) =>
@@ -138,7 +140,8 @@ export const documentoEdicionSchema = z
       d.subareaSlug !== undefined ||
       d.proyectoSlug !== undefined ||
       d.fechaAprobacion !== undefined ||
-      d.periodoRevisionMeses !== undefined,
+      d.periodoRevisionMeses !== undefined ||
+      d.requiereAcuse !== undefined,
     { message: "Debes indicar al menos un campo para editar." },
   );
 

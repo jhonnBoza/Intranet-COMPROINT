@@ -66,6 +66,7 @@ export interface Documento {
   fechaAprobacion?: string | null; // YYYY-MM-DD
   fechaProximaRevision?: string | null; // YYYY-MM-DD
   periodoRevisionMeses?: number | null;
+  requiereAcuse?: boolean; // exige acuse de lectura (ISO)
 }
 
 /** Un proyecto: agrupa documentos de varias áreas (expediente transversal). */

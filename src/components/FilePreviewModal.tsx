@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Download, FileQuestion } from "lucide-react";
+import { X, Download, FileQuestion, CheckCircle2, Loader2 } from "lucide-react";
 import type { Documento } from "@/types";
 import { FileIcon } from "./FileIcon";
 import { PdfViewer } from "./PdfViewer";
@@ -12,6 +12,8 @@ import { ZipViewer } from "./ZipViewer";
 
 export function FilePreviewModal({ doc, onCerrar }: { doc: Documento; onCerrar: () => void }) {
   const [mounted, setMounted] = useState(false);
+  const [acuse, setAcuse] = useState<{ requiere: boolean; yaLeido: boolean } | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
   const src = `/api/documents/${doc.id}?ver=1`;
 
   useEffect(() => setMounted(true), []);
@@ -20,6 +22,20 @@ export function FilePreviewModal({ doc, onCerrar }: { doc: Documento; onCerrar: 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onCerrar]);
+
+  // Estado del acuse de lectura de este documento.
+  useEffect(() => {
+    if (!doc.requiereAcuse) return;
+    fetch(`/api/documents/${doc.id}/acuse`).then((r) => r.json())
+      .then((d) => setAcuse({ requiere: !!d.requiere, yaLeido: !!d.yaLeido })).catch(() => {});
+  }, [doc.id, doc.requiereAcuse]);
+
+  async function confirmarLectura() {
+    setConfirmando(true);
+    const res = await fetch(`/api/documents/${doc.id}/acuse`, { method: "POST" });
+    setConfirmando(false);
+    if (res.ok) setAcuse((a) => (a ? { ...a, yaLeido: true } : a));
+  }
 
   let contenido: React.ReactNode;
   if (doc.tipo === "pdf") {
@@ -84,6 +100,29 @@ export function FilePreviewModal({ doc, onCerrar }: { doc: Documento; onCerrar: 
         </header>
 
         <div className="min-h-0 flex-1">{contenido}</div>
+
+        {/* Acuse de lectura (ISO): confirmar "leído y entendido" */}
+        {acuse?.requiere && (
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-2.5">
+            {acuse.yaLeido ? (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-estado-vigente">
+                <CheckCircle2 size={16} /> Confirmaste la lectura de este documento
+              </span>
+            ) : (
+              <>
+                <span className="text-xs text-slate-600">Este documento requiere tu confirmación de lectura.</span>
+                <button
+                  onClick={confirmarLectura}
+                  disabled={confirmando}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
+                >
+                  {confirmando ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                  Confirmar lectura
+                </button>
+              </>
+            )}
+          </footer>
+        )}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, Download, Eye, Pencil, Trash2, FolderPlus, ChevronRight,
-  ChevronsUpDown, ArrowUp, ArrowDown, Inbox, X, Loader2,
+  ChevronsUpDown, ArrowUp, ArrowDown, Inbox, X, Loader2, FileDown, FolderInput,
 } from "lucide-react";
 import type { Area, UsuarioPublico, Documento } from "@/types";
 import { accionesSobreDocumento, puedeSubir, puedeGestionarArea } from "@/lib/permissions";
@@ -16,6 +16,7 @@ import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { ModalPortal } from "./ModalPortal";
 import { useConfirm, useToast } from "./Feedback";
+import { descargarCSV } from "@/lib/exportar";
 import { formatoFecha, norm } from "@/lib/format";
 
 const PAGE_SIZE = 12;
@@ -69,6 +70,69 @@ export function AreaRepository({
       const data = await res.json().catch(() => ({}));
       toast(data.error ?? "No se pudo eliminar.", "error");
     }
+  }
+
+  // Exporta el listado maestro (documentos filtrados) a CSV/Excel.
+  function exportar() {
+    const nombreSub = (s?: string | null) => area.subareas.find((x) => x.slug === s)?.nombre ?? "";
+    const estadoTxt: Record<string, string> = { vigente: "Vigente", revision: "En revisión", obsoleto: "Obsoleto" };
+    descargarCSV(
+      `Listado_${area.slug}_${new Date().toISOString().slice(0, 10)}.csv`,
+      filtrados,
+      [
+        { encabezado: "Código", valor: (d) => d.codigo ?? "" },
+        { encabezado: "Nombre", valor: (d) => d.nombre },
+        { encabezado: "Categoría", valor: (d) => d.categoria },
+        { encabezado: "Carpeta", valor: (d) => nombreSub(d.subareaSlug) },
+        { encabezado: "Estado", valor: (d) => estadoTxt[d.estado] ?? d.estado },
+        { encabezado: "Versión", valor: (d) => d.version },
+        { encabezado: "Confidencialidad", valor: (d) => d.confidencialidad },
+        { encabezado: "Fecha de subida", valor: (d) => formatoFecha(d.fechaSubida) },
+        { encabezado: "Fecha de aprobación", valor: (d) => d.fechaAprobacion ?? "" },
+        { encabezado: "Próxima revisión", valor: (d) => d.fechaProximaRevision ?? "" },
+        { encabezado: "Autor", valor: (d) => d.autor },
+      ],
+    );
+    toast(`Exportados ${filtrados.length} documentos.`);
+  }
+
+  // --- Acciones en lote sobre la selección ---
+  async function eliminarSeleccion() {
+    const ids = Array.from(sel);
+    const ok = await confirm({
+      titulo: "Enviar a la papelera",
+      mensaje: `Se enviarán ${ids.length} documento${ids.length !== 1 ? "s" : ""} a la papelera. Gerencia puede restaurarlos.`,
+      confirmar: "Enviar a papelera",
+      peligro: true,
+    });
+    if (!ok) return;
+    let hechos = 0, fallos = 0;
+    for (const id of ids) {
+      const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      if (res.ok) { setDocs((prev) => prev.filter((d) => d.id !== id)); hechos++; }
+      else fallos++;
+    }
+    setSel(new Set());
+    toast(fallos ? `Enviados ${hechos}; ${fallos} sin permiso o error.` : `${hechos} enviados a la papelera.`, fallos ? "error" : "ok");
+  }
+
+  async function moverSeleccion(subareaSlug: string) {
+    const ids = Array.from(sel);
+    let hechos = 0, fallos = 0;
+    for (const id of ids) {
+      const res = await fetch(`/api/documents/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subareaSlug: subareaSlug || "" }),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.documento) setDocs((prev) => prev.map((d) => (d.id === id ? data.documento : d)));
+        hechos++;
+      } else fallos++;
+    }
+    setSel(new Set());
+    const destino = subareaSlug ? area.subareas.find((s) => s.slug === subareaSlug)?.nombre : "Sin carpeta";
+    toast(fallos ? `Movidos ${hechos}; ${fallos} sin permiso o error.` : `${hechos} movidos a “${destino}”.`, fallos ? "error" : "ok");
   }
 
   // Descarga varios en serie con enlaces temporales (evita el bloqueo de pop-ups).
@@ -220,16 +284,17 @@ export function AreaRepository({
           <p className="mt-0.5 text-sm text-slate-500">{area.descripcion}</p>
         </div>
 
-        {(puedeSubirAqui || puedeGestionar) && (
-          <div className="flex gap-2">
-            {puedeGestionar && (
-              <button onClick={() => setModalCarpeta(true)} className="btn-ghost"><FolderPlus size={16} /> Nueva carpeta</button>
-            )}
-            {puedeSubirAqui && (
-              <button onClick={() => setModal(true)} className="btn-primary"><Plus size={17} /> Subir documento</button>
-            )}
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportar} disabled={filtrados.length === 0} className="btn-ghost disabled:opacity-50">
+            <FileDown size={16} /> Exportar
+          </button>
+          {puedeGestionar && (
+            <button onClick={() => setModalCarpeta(true)} className="btn-ghost"><FolderPlus size={16} /> Nueva carpeta</button>
+          )}
+          {puedeSubirAqui && (
+            <button onClick={() => setModal(true)} className="btn-primary"><Plus size={17} /> Subir documento</button>
+          )}
+        </div>
       </div>
 
       {/* Barra de filtros */}
@@ -253,12 +318,29 @@ export function AreaRepository({
       {/* Tabla */}
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         {sel.size > 0 && (
-          <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+          <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
             <span className="font-medium">{sel.size} seleccionado{sel.size > 1 ? "s" : ""}</span>
-            <button
-              onClick={descargarSeleccion}
-              className="inline-flex items-center gap-1 text-slate-700 hover:underline"
-            ><Download size={14} /> Descargar</button>
+            <button onClick={descargarSeleccion} className="inline-flex items-center gap-1 text-slate-700 hover:underline">
+              <Download size={14} /> Descargar
+            </button>
+            {puedeGestionar && area.subareas.length > 0 && (
+              <label className="inline-flex items-center gap-1 text-slate-700">
+                <FolderInput size={14} />
+                <select
+                  value=""
+                  onChange={(e) => { if (e.target.value) moverSeleccion(e.target.value === "__ninguna__" ? "" : e.target.value); }}
+                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+                  aria-label="Mover a carpeta"
+                >
+                  <option value="">Mover a…</option>
+                  <option value="__ninguna__">Sin carpeta</option>
+                  {area.subareas.map((s) => <option key={s.slug} value={s.slug}>{s.nombre}</option>)}
+                </select>
+              </label>
+            )}
+            <button onClick={eliminarSeleccion} className="inline-flex items-center gap-1 text-estado-obsoleto hover:underline">
+              <Trash2 size={14} /> Eliminar
+            </button>
             <button onClick={() => setSel(new Set())} className="ml-auto text-slate-500 hover:underline">Limpiar</button>
           </div>
         )}

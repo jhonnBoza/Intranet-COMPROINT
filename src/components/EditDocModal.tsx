@@ -42,6 +42,8 @@ export function EditDocModal({
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [fechaAprobacion, setFechaAprobacion] = useState<string>(docInicial.fechaAprobacion ?? "");
   const [periodoRevision, setPeriodoRevision] = useState<number>(docInicial.periodoRevisionMeses ?? 0);
+  const [requiereAcuse, setRequiereAcuse] = useState<boolean>(!!docInicial.requiereAcuse);
+  const [acuse, setAcuse] = useState<{ total: number; leidos: { nombre: string; fecha: string }[]; pendientes: string[] } | null>(null);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [versiones, setVersiones] = useState<Version[]>([]);
@@ -53,7 +55,11 @@ export function EditDocModal({
       .then((d) => setVersiones(d.versiones ?? [])).catch(() => {});
     fetch(`/api/projects`).then((r) => r.json())
       .then((d) => setProyectos(d.proyectos ?? [])).catch(() => {});
-  }, [doc.id]);
+    if (docInicial.requiereAcuse) {
+      fetch(`/api/documents/${doc.id}/acuse`).then((r) => r.json())
+        .then((d) => setAcuse(d.reporte ?? null)).catch(() => {});
+    }
+  }, [doc.id, docInicial.requiereAcuse]);
 
   // Cerrar con Escape.
   useEffect(() => {
@@ -78,6 +84,7 @@ export function EditDocModal({
           proyectoSlug: proyecto || "",
           fechaAprobacion: fechaAprobacion || "",
           periodoRevisionMeses: periodoRevision,
+          requiereAcuse,
         }),
       });
       if (res.status === 401) { setError("Tu sesión caducó. Vuelve a iniciar sesión."); return; }
@@ -218,6 +225,41 @@ export function EditDocModal({
             <p className="-mt-1 text-2xs text-slate-500">
               Próxima revisión: <b className="text-slate-700">{sumarMeses(fechaAprobacion, periodoRevision)}</b>
             </p>
+          )}
+
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={requiereAcuse}
+              onChange={(e) => setRequiereAcuse(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-brand-700"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-slate-700">Requiere acuse de lectura</span>
+              <span className="mt-0.5 block text-xs text-slate-500">Cada persona deberá confirmar “leído y entendido”.</span>
+            </span>
+          </label>
+
+          {/* Reporte de acuse (quién leyó / quién falta) */}
+          {docInicial.requiereAcuse && acuse && (
+            <div className="rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                <span className="text-xs font-medium text-slate-600">Acuse de lectura</span>
+                <span className="text-2xs font-semibold text-brand-700">{acuse.leidos.length} de {acuse.total} leídos</span>
+              </div>
+              <div className="max-h-36 space-y-1 overflow-y-auto px-3 py-2 text-2xs">
+                {acuse.leidos.map((l) => (
+                  <div key={l.nombre} className="flex items-center justify-between">
+                    <span className="text-estado-vigente">✓ {l.nombre}</span>
+                    <span className="text-slate-400">{formatoFecha(l.fecha)}</span>
+                  </div>
+                ))}
+                {acuse.pendientes.map((n) => (
+                  <div key={n} className="text-slate-400">• {n} — pendiente</div>
+                ))}
+                {acuse.total === 0 && <p className="text-slate-400">Nadie tiene este documento asignado aún.</p>}
+              </div>
+            </div>
           )}
 
           {/* Versiones */}

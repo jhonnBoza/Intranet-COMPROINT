@@ -92,6 +92,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
   const [fechaAprobacion, setFechaAprobacion] = useState(hoyISO());
   const [periodoRevision, setPeriodoRevision] = useState(0);
   const [soloVista, setSoloVista] = useState(false);
+  const [requiereAcuse, setRequiereAcuse] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [terminado, setTerminado] = useState(false);
   const [error, setError] = useState("");
@@ -219,6 +220,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
           mime: item.file.type || "application/octet-stream",
           fechaAprobacion: fechaAprobacion || "",
           periodoRevisionMeses: periodoRevision,
+          requiereAcuse,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -459,6 +461,20 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
             <span className="text-sm">
               <span className="font-medium text-slate-700">Solo vista previa (sin descarga)</span>
               <span className="mt-0.5 block text-xs text-slate-500">Los usuarios podrán verlos dentro de la intranet pero no descargarlos.</span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={requiereAcuse}
+              disabled={subiendo}
+              onChange={(e) => setRequiereAcuse(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-brand-700"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-slate-700">Requiere acuse de lectura</span>
+              <span className="mt-0.5 block text-xs text-slate-500">Cada persona deberá confirmar “leído y entendido”; podrás ver quién lo leyó.</span>
             </span>
           </label>
 

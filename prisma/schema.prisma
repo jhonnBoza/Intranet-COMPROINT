@@ -68,6 +68,7 @@ model Documento {
   fechaProximaRevision  String? // YYYY-MM-DD límite para revisarlo (calculada)
   periodoRevisionMeses  Int?    // cada cuántos meses se revisa
   avisoVencimiento      Boolean @default(false) // ya se notificó "por vencer"
+  requiereAcuse         Boolean @default(false) // exige acuse de lectura (ISO)
 
   @@index([areaSlug, fechaSubida])
   @@index([areaSlug, subareaSlug])
@@ -108,6 +109,17 @@ model Auditoria {
 
   @@index([fecha])
   @@index([usuarioId])
+}
+
+// Acuse de lectura ("leído y entendido") — distribución controlada ISO 9001.
+model AcuseLectura {
+  id          String @id @default(cuid())
+  documentoId String
+  usuarioId   String
+  fecha       String // ISO
+
+  @@unique([documentoId, usuarioId])
+  @@index([documentoId])
 }
 
 // Historial de versiones de un documento (cada reemplazo guarda la anterior).

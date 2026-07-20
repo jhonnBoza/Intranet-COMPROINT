@@ -299,6 +299,7 @@ export interface NuevoDocumento {
   soloVista?: boolean;
   fechaAprobacion?: string | null;    // YYYY-MM-DD
   periodoRevisionMeses?: number | null;
+  requiereAcuse?: boolean;
 }
 
 /** Calcula la próxima revisión a partir de la aprobación y el periodo. */
@@ -370,6 +371,7 @@ export async function crearDocumento(
     fechaAprobacion: data.fechaAprobacion ?? null,
     periodoRevisionMeses: data.periodoRevisionMeses ?? null,
     fechaProximaRevision,
+    requiereAcuse: !!data.requiereAcuse,
   };
 
   try {
@@ -448,6 +450,7 @@ export interface CambiosDocumento {
   proyectoSlug?: string | null;
   fechaAprobacion?: string | null;
   periodoRevisionMeses?: number | null;
+  requiereAcuse?: boolean;
 }
 
 /** Edita metadatos de un documento (estado, confidencialidad, nombre, carpeta, proyecto, vigencia). */
@@ -481,6 +484,7 @@ export async function actualizarDocumento(
       categoria: cambios.categoria ?? doc.categoria,
       subareaSlug: cambios.subareaSlug !== undefined ? cambios.subareaSlug : doc.subareaSlug,
       proyectoSlug: cambios.proyectoSlug !== undefined ? cambios.proyectoSlug : doc.proyectoSlug,
+      ...(cambios.requiereAcuse !== undefined ? { requiereAcuse: cambios.requiereAcuse } : {}),
       ...(cambiaVigencia
         ? {
             fechaAprobacion: nuevaAprobacion,
@@ -579,6 +583,64 @@ export async function vaciarPapelera(user: UsuarioPublico): Promise<number> {
   ]);
   try { await borrarArchivos(rutas); } catch { /* best-effort */ }
   return docs.length;
+}
+
+// ============================================================
+//  ACUSE DE LECTURA — distribución controlada ISO 9001.
+// ============================================================
+
+/** Registra que el usuario leyó y entendió el documento. */
+export async function registrarAcuse(user: UsuarioPublico, id: string): Promise<void> {
+  const doc = await docVivo(id);
+  if (!doc) throw new Error("Documento no encontrado.");
+  if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
+  await prisma.acuseLectura.upsert({
+    where: { documentoId_usuarioId: { documentoId: id, usuarioId: user.id } },
+    update: {},
+    create: { documentoId: id, usuarioId: user.id, fecha: new Date().toISOString() },
+  });
+}
+
+export interface EstadoAcuse {
+  requiere: boolean;
+  yaLeido: boolean;
+  reporte?: {
+    total: number;
+    leidos: { nombre: string; fecha: string }[];
+    pendientes: string[];
+  };
+}
+
+/**
+ * Estado del acuse para el usuario. Si además puede editar el documento,
+ * incluye el reporte de quién lo leyó y quién falta (destinatarios = quienes
+ * pueden ver el documento).
+ */
+export async function estadoAcuse(user: UsuarioPublico, id: string): Promise<EstadoAcuse | null> {
+  const doc = await docVivo(id);
+  if (!doc) return null;
+  if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
+
+  const requiere = !!(doc as DocConArchivo & { requiereAcuse?: boolean }).requiereAcuse;
+  if (!requiere) return { requiere: false, yaLeido: false };
+
+  const mio = await prisma.acuseLectura.findUnique({
+    where: { documentoId_usuarioId: { documentoId: id, usuarioId: user.id } },
+  });
+  const base: EstadoAcuse = { requiere: true, yaLeido: !!mio };
+
+  if (!puedeEditarDocumento(user, doc)) return base;
+
+  // Reporte para editores: destinatarios = usuarios activos que pueden ver el doc.
+  const usuarios = await prisma.usuario.findMany({ where: { activo: true } });
+  const objetivo = usuarios.filter((u) => puedeVerDocumento(u as unknown as UsuarioPublico, doc));
+  const acuses = await prisma.acuseLectura.findMany({ where: { documentoId: id } });
+  const porUsuario = new Map(acuses.map((a) => [a.usuarioId, a.fecha]));
+  const leidos = objetivo
+    .filter((u) => porUsuario.has(u.id))
+    .map((u) => ({ nombre: u.nombre, fecha: porUsuario.get(u.id)! }));
+  const pendientes = objetivo.filter((u) => !porUsuario.has(u.id)).map((u) => u.nombre);
+  return { ...base, reporte: { total: objetivo.length, leidos, pendientes } };
 }
 
 // ============================================================
