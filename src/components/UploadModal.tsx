@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { UploadCloud, X, Loader2, FolderUp, CheckCircle2, AlertCircle, Trash2, FileText } from "lucide-react";
 import type { Area, Documento } from "@/types";
 import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
+import { PERIODOS_REVISION, sumarMeses } from "@/lib/vigencia";
 
 interface Props {
   area: Area;
@@ -88,6 +89,8 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
   const [confidencialidad, setConfidencialidad] = useState<Documento["confidencialidad"]>("publico");
   const [proyecto, setProyecto] = useState("");
   const [proyectos, setProyectos] = useState<{ slug: string; nombre: string }[]>([]);
+  const [fechaAprobacion, setFechaAprobacion] = useState("");
+  const [periodoRevision, setPeriodoRevision] = useState(0);
   const [soloVista, setSoloVista] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [terminado, setTerminado] = useState(false);
@@ -214,6 +217,8 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
           soloVista,
           storagePath: urlData.path,
           mime: item.file.type || "application/octet-stream",
+          fechaAprobacion: fechaAprobacion || "",
+          periodoRevisionMeses: periodoRevision,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -424,6 +429,23 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subar
               </select>
             </Campo>
           </div>
+
+          {/* Control de vigencia (ISO) — opcional */}
+          <div className="grid grid-cols-2 gap-4">
+            <Campo label="Fecha de aprobación">
+              <input type="date" value={fechaAprobacion} onChange={(e) => setFechaAprobacion(e.target.value)} className="select" disabled={subiendo} />
+            </Campo>
+            <Campo label="Revisión periódica">
+              <select value={periodoRevision} onChange={(e) => setPeriodoRevision(Number(e.target.value))} className="select" disabled={subiendo}>
+                {PERIODOS_REVISION.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+              </select>
+            </Campo>
+          </div>
+          {fechaAprobacion && periodoRevision > 0 && (
+            <p className="-mt-2 text-2xs text-slate-500">
+              Próxima revisión calculada: <b className="text-slate-700">{sumarMeses(fechaAprobacion, periodoRevision)}</b>
+            </p>
+          )}
 
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
             <input

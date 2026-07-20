@@ -1,12 +1,12 @@
 import Link from "next/link";
 import {
   Crown, BadgeCheck, Factory, FolderKanban, Truck, Briefcase,
-  ChevronRight, type LucideIcon,
+  ChevronRight, TriangleAlert, type LucideIcon,
 } from "lucide-react";
 import { getUsuarioActual } from "@/lib/session";
 import { AREAS } from "@/server/data/areas";
 import { areasVisibles, puedePublicarAnuncios } from "@/lib/permissions";
-import { documentosRecientes, contarDocumentos, contarDocumentosPorArea } from "@/server/services/document.service";
+import { documentosRecientes, contarDocumentos, contarDocumentosPorArea, contarVencimientos } from "@/server/services/document.service";
 import { listarAnuncios } from "@/server/services/announcement.service";
 import { FileIcon } from "@/components/FileIcon";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -21,11 +21,12 @@ export default async function DashboardPage() {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
   const areas = areasVisibles(user, AREAS);
-  const [conteos, porArea, recientes, anuncios] = await Promise.all([
+  const [conteos, porArea, recientes, anuncios, venc] = await Promise.all([
     contarDocumentos(user),
     contarDocumentosPorArea(user),
     documentosRecientes(user, 6),
     listarAnuncios(),
+    contarVencimientos(user),
   ]);
 
   const { total, enRevision, obsoletos } = conteos;
@@ -41,6 +42,26 @@ export default async function DashboardPage() {
         </div>
         <p className="hidden text-sm capitalize text-slate-400 sm:block">{FECHA_HOY}</p>
       </div>
+
+      {/* Aviso de vencimientos (control de revisión ISO) */}
+      {(venc.vencidos > 0 || venc.porVencer > 0) && (
+        <Link
+          href="/vencimientos"
+          className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm transition hover:brightness-[0.98] ${
+            venc.vencidos > 0
+              ? "border-red-200 bg-red-50 text-estado-obsoleto"
+              : "border-amber-200 bg-amber-50 text-amber-700"
+          }`}
+        >
+          <TriangleAlert size={18} className="shrink-0" />
+          <span className="flex-1 font-medium">
+            {venc.vencidos > 0 && <>{venc.vencidos} documento{venc.vencidos !== 1 ? "s" : ""} vencido{venc.vencidos !== 1 ? "s" : ""}</>}
+            {venc.vencidos > 0 && venc.porVencer > 0 && <> · </>}
+            {venc.porVencer > 0 && <>{venc.porVencer} por vencer (≤30 días)</>}
+          </span>
+          <span className="flex items-center gap-1 text-xs font-semibold">Revisar <ChevronRight size={14} /></span>
+        </Link>
+      )}
 
       {/* KPIs — barra de métricas sobria */}
       <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0">

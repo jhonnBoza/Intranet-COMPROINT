@@ -63,6 +63,9 @@ export interface Documento {
   tamano: string; // ej. "2.4 MB"
   proyectoSlug?: string | null; // proyecto al que pertenece (opcional)
   soloVista?: boolean; // true = solo vista previa, sin descarga
+  fechaAprobacion?: string | null; // YYYY-MM-DD
+  fechaProximaRevision?: string | null; // YYYY-MM-DD
+  periodoRevisionMeses?: number | null;
 }
 
 /** Un proyecto: agrupa documentos de varias áreas (expediente transversal). */

@@ -64,12 +64,17 @@ model Documento {
   eliminado        Boolean @default(false) // papelera (borrado lógico, reversible)
   eliminadoEn      String? // ISO de cuándo se envió a la papelera
   eliminadoPor     String? // nombre de quien lo eliminó
+  fechaAprobacion       String? // YYYY-MM-DD en que se aprobó (control de vigencia ISO)
+  fechaProximaRevision  String? // YYYY-MM-DD límite para revisarlo (calculada)
+  periodoRevisionMeses  Int?    // cada cuántos meses se revisa
+  avisoVencimiento      Boolean @default(false) // ya se notificó "por vencer"
 
   @@index([areaSlug, fechaSubida])
   @@index([areaSlug, subareaSlug])
   @@index([proyectoSlug])
   @@index([eliminado])
   @@index([codigo])
+  @@index([fechaProximaRevision])
 }
 
 model Proyecto {

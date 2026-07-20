@@ -8,6 +8,7 @@ import { AREAS } from "@/server/data/areas";
 import { accionesSobreDocumento } from "@/lib/permissions";
 import { FileIcon, etiquetaTipo } from "./FileIcon";
 import { StatusBadge, ConfidentialityBadge } from "./StatusBadge";
+import { VigenciaBadge } from "./VigenciaBadge";
 import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { formatoFecha, norm } from "@/lib/format";
@@ -239,7 +240,12 @@ function Fila({
       </td>
       <td className="px-4 py-3 whitespace-nowrap tabular text-slate-500">{formatoFecha(doc.fechaSubida)}</td>
       <td className="px-4 py-3 text-slate-600">{doc.autor}</td>
-      <td className="px-4 py-3"><StatusBadge estado={doc.estado} /></td>
+      <td className="px-4 py-3">
+        <div className="flex flex-col items-start gap-1">
+          <StatusBadge estado={doc.estado} />
+          <VigenciaBadge fechaProximaRevision={doc.fechaProximaRevision} />
+        </div>
+      </td>
       <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-0.5">
           <Accion titulo="Vista previa" activo={acc.ver} onClick={() => onVer(doc)}><Eye size={16} /></Accion>
@@ -268,6 +274,7 @@ function TarjetaMovil({
           <p className="break-words text-sm font-medium text-slate-800">{doc.nombre}</p>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-slate-500">
             <StatusBadge estado={doc.estado} />
+            <VigenciaBadge fechaProximaRevision={doc.fechaProximaRevision} />
             <ConfidentialityBadge nivel={doc.confidencialidad} />
             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600">{NOMBRE_AREA[doc.areaSlug] ?? doc.areaSlug}</span>
           </div>

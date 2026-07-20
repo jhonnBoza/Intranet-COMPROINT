@@ -68,6 +68,8 @@ export async function POST(req: Request) {
       contenidoBase64: validacion.data.contenidoBase64 ?? null,
       mime: validacion.data.mime ?? null,
       soloVista: !!validacion.data.soloVista,
+      fechaAprobacion: validacion.data.fechaAprobacion ?? null,
+      periodoRevisionMeses: validacion.data.periodoRevisionMeses ?? null,
     });
     await auditar(user, { accion: "subió", entidad: "documento", detalle: doc.nombre, areaSlug: doc.areaSlug });
     // Avisa a los aprobadores (jefe del área + gerencia) que hay algo por revisar.

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Crown, BadgeCheck, Factory, FolderKanban, Truck, Briefcase,
-  LayoutDashboard, ChevronRight, FolderGit2, X, Users, ScrollText, Trash2, ClipboardCheck, type LucideIcon,
+  LayoutDashboard, ChevronRight, FolderGit2, X, Users, ScrollText, Trash2, ClipboardCheck, CalendarClock, type LucideIcon,
 } from "lucide-react";
 import type { Area, UsuarioPublico } from "@/types";
 import { puedeGestionarArea, puedeGestionarUsuarios } from "@/lib/permissions";
@@ -37,6 +37,7 @@ export function Sidebar({ areas, user, abierto, onCerrar }: Props) {
           {user.rol !== "OPERARIO" && (
             <NavLink href="/pendientes" activo={pathname.startsWith("/pendientes")} icon={ClipboardCheck} label="Pendientes de aprobar" onNavegar={onCerrar} />
           )}
+          <NavLink href="/vencimientos" activo={pathname.startsWith("/vencimientos")} icon={CalendarClock} label="Vencimientos" onNavegar={onCerrar} />
 
           <Seccion titulo="Repositorio documental" />
           <div className="space-y-0.5">

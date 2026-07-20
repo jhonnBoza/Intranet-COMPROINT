@@ -17,6 +17,8 @@ import {
   crearUrlSubida,
   existeArchivo,
 } from "@/lib/storage";
+import { sumarMeses } from "@/lib/vigencia";
+import { notificarAprobadores } from "@/server/services/notification.service";
 import type { Documento, UsuarioPublico, TipoArchivo, EstadoDocumento, Confidencialidad } from "@/types";
 
 // ============================================================
@@ -29,7 +31,7 @@ const asDocs = (rows: unknown): Documento[] => rows as Documento[];
 
 /** Quita campos internos antes de exponer al cliente. */
 function limpiar(doc: unknown): Documento {
-  const { storagePath, mime, eliminado, eliminadoEn, eliminadoPor, ...pub } =
+  const { storagePath, mime, eliminado, eliminadoEn, eliminadoPor, avisoVencimiento, ...pub } =
     doc as Record<string, unknown>;
   return pub as unknown as Documento;
 }
@@ -121,6 +123,38 @@ export async function contarDocumentos(
   return { total, enRevision, obsoletos };
 }
 
+/** Conteo de documentos por vencer (≤30 días) y vencidos, visibles para el usuario. */
+export async function contarVencimientos(
+  user: UsuarioPublico,
+): Promise<{ porVencer: number; vencidos: number }> {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const en30 = (() => { const d = new Date(hoy + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 30); return d.toISOString().slice(0, 10); })();
+  const base = { ...whereVisible(user), eliminado: false, estado: { not: "obsoleto" } };
+  const [porVencer, vencidos] = await Promise.all([
+    prisma.documento.count({ where: { ...base, fechaProximaRevision: { gte: hoy, lte: en30 } } }),
+    prisma.documento.count({ where: { ...base, fechaProximaRevision: { lt: hoy } } }),
+  ]);
+  return { porVencer, vencidos };
+}
+
+/** Lista los documentos por vencer o vencidos (para la vista de vencimientos). */
+export async function documentosPorVencer(user: UsuarioPublico): Promise<Documento[]> {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const en30 = (() => { const d = new Date(hoy + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 30); return d.toISOString().slice(0, 10); })();
+  const rows = asDocs(
+    await prisma.documento.findMany({
+      where: {
+        ...whereVisible(user),
+        eliminado: false,
+        estado: { not: "obsoleto" },
+        fechaProximaRevision: { not: null, lte: en30 },
+      },
+      orderBy: { fechaProximaRevision: "asc" },
+    }),
+  );
+  return limpiarLista(rows);
+}
+
 /** Documentos recientes visibles para el dashboard (orden y límite en SQL). */
 export async function documentosRecientes(
   user: UsuarioPublico,
@@ -156,6 +190,36 @@ export async function buscarGlobal(
     }),
   );
   return limpiarLista(rows);
+}
+
+/**
+ * Notifica a los aprobadores de cada área los documentos que entran en
+ * "por vencer" (o ya vencidos) y aún no se han avisado. Idempotente: marca
+ * `avisoVencimiento` para no repetir. Pensada para ejecutarse en un cron diario.
+ */
+export async function notificarVencimientos(): Promise<number> {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const en30 = (() => { const d = new Date(hoy + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 30); return d.toISOString().slice(0, 10); })();
+  const pendientes = await prisma.documento.findMany({
+    where: {
+      eliminado: false,
+      estado: { not: "obsoleto" },
+      avisoVencimiento: false,
+      fechaProximaRevision: { not: null, lte: en30 },
+    },
+    select: { id: true, codigo: true, nombre: true, areaSlug: true, fechaProximaRevision: true },
+  });
+  for (const d of pendientes) {
+    const etiqueta = d.codigo ? `${d.codigo} — ${d.nombre}` : d.nombre;
+    await notificarAprobadores(
+      d.areaSlug,
+      "Documento por revisar",
+      `“${etiqueta}” debe revisarse antes del ${d.fechaProximaRevision}.`,
+      `/vencimientos`,
+    );
+    await prisma.documento.update({ where: { id: d.id }, data: { avisoVencimiento: true } });
+  }
+  return pendientes.length;
 }
 
 /** Documentos de un proyecto (de todas las áreas) que el usuario puede ver. */
@@ -233,6 +297,17 @@ export interface NuevoDocumento {
   contenidoBase64?: string | null;   // subida legacy (archivos pequeños)
   mime?: string | null;
   soloVista?: boolean;
+  fechaAprobacion?: string | null;    // YYYY-MM-DD
+  periodoRevisionMeses?: number | null;
+}
+
+/** Calcula la próxima revisión a partir de la aprobación y el periodo. */
+function calcularProximaRevision(
+  fechaAprobacion?: string | null,
+  periodoMeses?: number | null,
+): string | null {
+  if (!fechaAprobacion || !periodoMeses || periodoMeses <= 0) return null;
+  return sumarMeses(fechaAprobacion, periodoMeses);
 }
 
 /** Registra un documento nuevo (valida permiso de subida y confidencialidad). */
@@ -265,6 +340,7 @@ export async function crearDocumento(
   }
 
   const codigo = await siguienteCodigo(data.areaSlug, data.categoria);
+  const fechaProximaRevision = calcularProximaRevision(data.fechaAprobacion, data.periodoRevisionMeses);
 
   try {
     const doc = await prisma.documento.create({
@@ -286,6 +362,9 @@ export async function crearDocumento(
         storagePath,
         mime: storagePath ? mime : null,
         soloVista: !!data.soloVista,
+        fechaAprobacion: data.fechaAprobacion ?? null,
+        periodoRevisionMeses: data.periodoRevisionMeses ?? null,
+        fechaProximaRevision,
       },
     });
     return limpiar(doc);
@@ -348,21 +427,31 @@ export interface CambiosDocumento {
   categoria?: string;
   subareaSlug?: string | null;
   proyectoSlug?: string | null;
+  fechaAprobacion?: string | null;
+  periodoRevisionMeses?: number | null;
 }
 
-/** Edita metadatos de un documento (estado, confidencialidad, nombre, carpeta, proyecto). */
+/** Edita metadatos de un documento (estado, confidencialidad, nombre, carpeta, proyecto, vigencia). */
 export async function actualizarDocumento(
   user: UsuarioPublico,
   id: string,
   cambios: CambiosDocumento,
 ): Promise<Documento> {
-  const doc = await docVivo(id);
+  const doc = (await docVivo(id)) as DocConArchivo & {
+    fechaAprobacion?: string | null; periodoRevisionMeses?: number | null; fechaProximaRevision?: string | null;
+  } | null;
   if (!doc) throw new Error("Documento no encontrado.");
   if (!puedeEditarDocumento(user, doc)) throw new Error("Sin permiso para editar este documento.");
 
   if (cambios.confidencialidad && !nivelesVisibles(user).includes(cambios.confidencialidad)) {
     throw new Error("No puede asignar un nivel de confidencialidad superior al suyo.");
   }
+
+  // Recalcula la vigencia si cambió la fecha de aprobación o el periodo.
+  const nuevaAprobacion = cambios.fechaAprobacion !== undefined ? cambios.fechaAprobacion : doc.fechaAprobacion ?? null;
+  const nuevoPeriodo = cambios.periodoRevisionMeses !== undefined ? cambios.periodoRevisionMeses : doc.periodoRevisionMeses ?? null;
+  const nuevaProxima = calcularProximaRevision(nuevaAprobacion, nuevoPeriodo);
+  const cambiaVigencia = cambios.fechaAprobacion !== undefined || cambios.periodoRevisionMeses !== undefined;
 
   const actualizado = await prisma.documento.update({
     where: { id },
@@ -373,6 +462,14 @@ export async function actualizarDocumento(
       categoria: cambios.categoria ?? doc.categoria,
       subareaSlug: cambios.subareaSlug !== undefined ? cambios.subareaSlug : doc.subareaSlug,
       proyectoSlug: cambios.proyectoSlug !== undefined ? cambios.proyectoSlug : doc.proyectoSlug,
+      ...(cambiaVigencia
+        ? {
+            fechaAprobacion: nuevaAprobacion,
+            periodoRevisionMeses: nuevoPeriodo,
+            fechaProximaRevision: nuevaProxima,
+            avisoVencimiento: false, // reinicia el aviso para el nuevo ciclo
+          }
+        : {}),
     },
   });
   return limpiar(actualizado);

@@ -5,6 +5,7 @@ import { Pencil, X, Loader2, History, Upload, Download } from "lucide-react";
 import type { Documento } from "@/types";
 import { formatoFecha } from "@/lib/format";
 import { MAX_ARCHIVO_BYTES } from "@/lib/validation";
+import { PERIODOS_REVISION, sumarMeses } from "@/lib/vigencia";
 import { ModalPortal } from "./ModalPortal";
 
 const ESTADOS = [
@@ -39,6 +40,8 @@ export function EditDocModal({
   const [subarea, setSubarea] = useState<string>(docInicial.subareaSlug ?? "");
   const [proyecto, setProyecto] = useState<string>(docInicial.proyectoSlug ?? "");
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const [fechaAprobacion, setFechaAprobacion] = useState<string>(docInicial.fechaAprobacion ?? "");
+  const [periodoRevision, setPeriodoRevision] = useState<number>(docInicial.periodoRevisionMeses ?? 0);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [versiones, setVersiones] = useState<Version[]>([]);
@@ -73,6 +76,8 @@ export function EditDocModal({
           categoria,
           subareaSlug: subarea || "",
           proyectoSlug: proyecto || "",
+          fechaAprobacion: fechaAprobacion || "",
+          periodoRevisionMeses: periodoRevision,
         }),
       });
       if (res.status === 401) { setError("Tu sesión caducó. Vuelve a iniciar sesión."); return; }
@@ -195,6 +200,25 @@ export function EditDocModal({
               {CONF.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </div>
+
+          {/* Control de vigencia (ISO) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Fecha de aprobación</label>
+              <input type="date" value={fechaAprobacion} onChange={(e) => setFechaAprobacion(e.target.value)} className="field-select w-full" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Revisión periódica</label>
+              <select value={periodoRevision} onChange={(e) => setPeriodoRevision(Number(e.target.value))} className="field-select w-full">
+                {PERIODOS_REVISION.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+              </select>
+            </div>
+          </div>
+          {fechaAprobacion && periodoRevision > 0 && (
+            <p className="-mt-1 text-2xs text-slate-500">
+              Próxima revisión: <b className="text-slate-700">{sumarMeses(fechaAprobacion, periodoRevision)}</b>
+            </p>
+          )}
 
           {/* Versiones */}
           <div className="rounded-lg border border-slate-200">

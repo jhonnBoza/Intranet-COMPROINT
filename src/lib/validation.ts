@@ -79,6 +79,22 @@ const slugOpcional = z
   .transform((s) => (s.trim() === "" ? null : s.trim()))
   .nullish();
 
+/** Fecha YYYY-MM-DD opcional (acepta "" como null). */
+const fechaOpcional = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida.")
+  .or(z.literal(""))
+  .transform((s) => (s === "" ? null : s))
+  .nullish();
+
+/** Periodo de revisión en meses (0 = sin revisión). */
+const periodoRevision = z
+  .number()
+  .int()
+  .min(0)
+  .max(120)
+  .nullish();
+
 /** POST /api/documents — registra un documento nuevo. */
 export const documentoNuevoSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio").regex(EXTENSIONES_OK, "Tipo de archivo no permitido."),
@@ -92,6 +108,8 @@ export const documentoNuevoSchema = z.object({
   contenidoBase64: z.string().nullish(),        // subida legacy
   mime: z.string().nullish(),
   soloVista: z.boolean().nullish(),
+  fechaAprobacion: fechaOpcional,
+  periodoRevisionMeses: periodoRevision,
 });
 
 /** POST /api/documents/upload-url — pide una URL firmada de subida directa. */
@@ -108,6 +126,8 @@ export const documentoEdicionSchema = z
     categoria: categoriaDocumentoSchema.optional(),
     subareaSlug: slugOpcional,
     proyectoSlug: slugOpcional,
+    fechaAprobacion: fechaOpcional,
+    periodoRevisionMeses: periodoRevision,
   })
   .refine(
     (d) =>
@@ -116,7 +136,9 @@ export const documentoEdicionSchema = z
       d.nombre !== undefined ||
       d.categoria !== undefined ||
       d.subareaSlug !== undefined ||
-      d.proyectoSlug !== undefined,
+      d.proyectoSlug !== undefined ||
+      d.fechaAprobacion !== undefined ||
+      d.periodoRevisionMeses !== undefined,
     { message: "Debes indicar al menos un campo para editar." },
   );
 
