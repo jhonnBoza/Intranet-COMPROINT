@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus, Search, Download, Eye, Pencil, Trash2, FolderPlus, ChevronRight,
-  ChevronsUpDown, ArrowUp, ArrowDown, Inbox, X, Loader2, FileDown, FolderInput,
+  ChevronsUpDown, ArrowUp, ArrowDown, Inbox, X, Loader2, FolderInput,
 } from "lucide-react";
 import type { Area, UsuarioPublico, Documento } from "@/types";
 import { accionesSobreDocumento, puedeSubir, puedeGestionarArea } from "@/lib/permissions";
@@ -16,7 +16,6 @@ import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { ModalPortal } from "./ModalPortal";
 import { useConfirm, useToast } from "./Feedback";
-import { descargarCSV } from "@/lib/exportar";
 import { formatoFecha, norm } from "@/lib/format";
 
 const PAGE_SIZE = 12;
@@ -70,30 +69,6 @@ export function AreaRepository({
       const data = await res.json().catch(() => ({}));
       toast(data.error ?? "No se pudo eliminar.", "error");
     }
-  }
-
-  // Exporta el listado maestro (documentos filtrados) a CSV/Excel.
-  function exportar() {
-    const nombreSub = (s?: string | null) => area.subareas.find((x) => x.slug === s)?.nombre ?? "";
-    const estadoTxt: Record<string, string> = { vigente: "Vigente", revision: "En revisión", obsoleto: "Obsoleto" };
-    descargarCSV(
-      `Listado_${area.slug}_${new Date().toISOString().slice(0, 10)}.csv`,
-      filtrados,
-      [
-        { encabezado: "Código", valor: (d) => d.codigo ?? "" },
-        { encabezado: "Nombre", valor: (d) => d.nombre },
-        { encabezado: "Categoría", valor: (d) => d.categoria },
-        { encabezado: "Carpeta", valor: (d) => nombreSub(d.subareaSlug) },
-        { encabezado: "Estado", valor: (d) => estadoTxt[d.estado] ?? d.estado },
-        { encabezado: "Versión", valor: (d) => d.version },
-        { encabezado: "Confidencialidad", valor: (d) => d.confidencialidad },
-        { encabezado: "Fecha de subida", valor: (d) => formatoFecha(d.fechaSubida) },
-        { encabezado: "Fecha de aprobación", valor: (d) => d.fechaAprobacion ?? "" },
-        { encabezado: "Próxima revisión", valor: (d) => d.fechaProximaRevision ?? "" },
-        { encabezado: "Autor", valor: (d) => d.autor },
-      ],
-    );
-    toast(`Exportados ${filtrados.length} documentos.`);
   }
 
   // --- Acciones en lote sobre la selección ---
@@ -285,9 +260,6 @@ export function AreaRepository({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button onClick={exportar} disabled={filtrados.length === 0} className="btn-ghost disabled:opacity-50">
-            <FileDown size={16} /> Exportar
-          </button>
           {puedeGestionar && (
             <button onClick={() => setModalCarpeta(true)} className="btn-ghost"><FolderPlus size={16} /> Nueva carpeta</button>
           )}

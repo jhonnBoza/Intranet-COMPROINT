@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight, Search, ScrollText, FileDown, Loader2 } from "lucide-react";
+import { ChevronRight, Search, ScrollText } from "lucide-react";
 import { ETIQUETA_ROL } from "@/lib/permissions";
 import { formatoFechaHora } from "@/lib/format";
-import { descargarCSV } from "@/lib/exportar";
 import type { Rol } from "@/types";
 
 interface Evento {
@@ -26,38 +25,6 @@ export function AuditLog({ inicial }: { inicial: Datos }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [cargando, setCargando] = useState(false);
-  const [exportando, setExportando] = useState(false);
-
-  // Exporta toda la bitácora (recorre todas las páginas del filtro actual).
-  async function exportar() {
-    setExportando(true);
-    try {
-      const eventos: Evento[] = [];
-      let p = 1, totalPag = 1;
-      do {
-        const res = await fetch(`/api/audit?page=${p}&q=${encodeURIComponent(q)}`);
-        const d = await res.json();
-        if (!res.ok) break;
-        eventos.push(...(d.eventos ?? []));
-        totalPag = d.totalPaginas ?? 1;
-        p++;
-      } while (p <= totalPag && p <= 400);
-      descargarCSV(
-        `Bitacora_${new Date().toISOString().slice(0, 10)}.csv`,
-        eventos,
-        [
-          { encabezado: "Fecha", valor: (e) => formatoFechaHora(e.fecha) },
-          { encabezado: "Usuario", valor: (e) => e.usuarioNombre },
-          { encabezado: "Rol", valor: (e) => ETIQUETA_ROL[e.rol as Rol] ?? e.rol },
-          { encabezado: "Acción", valor: (e) => e.accion },
-          { encabezado: "Entidad", valor: (e) => e.entidad },
-          { encabezado: "Detalle", valor: (e) => e.detalle },
-        ],
-      );
-    } finally {
-      setExportando(false);
-    }
-  }
 
   useEffect(() => {
     setCargando(true);
@@ -74,20 +41,15 @@ export function AuditLog({ inicial }: { inicial: Datos }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <nav className="flex items-center gap-1 text-xs text-slate-400">
-            <span>Inicio</span><ChevronRight size={13} /><span className="font-medium text-slate-600">Administración</span>
-            <ChevronRight size={13} /><span className="font-medium text-gold-600">Bitácora de auditoría</span>
-          </nav>
-          <h1 className="mt-1.5 flex items-center gap-2 text-xl font-semibold text-slate-800">
-            <ScrollText size={20} className="text-slate-400" /> Bitácora de auditoría
-          </h1>
-          <p className="mt-0.5 text-sm text-slate-500">Registro de acciones: quién hizo qué y cuándo (trazabilidad ISO 9001).</p>
-        </div>
-        <button onClick={exportar} disabled={exportando || datos.total === 0} className="btn-ghost shrink-0 disabled:opacity-50">
-          {exportando ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />} Exportar
-        </button>
+      <div>
+        <nav className="flex items-center gap-1 text-xs text-slate-400">
+          <span>Inicio</span><ChevronRight size={13} /><span className="font-medium text-slate-600">Administración</span>
+          <ChevronRight size={13} /><span className="font-medium text-gold-600">Bitácora de auditoría</span>
+        </nav>
+        <h1 className="mt-1.5 flex items-center gap-2 text-xl font-semibold text-slate-800">
+          <ScrollText size={20} className="text-slate-400" /> Bitácora de auditoría
+        </h1>
+        <p className="mt-0.5 text-sm text-slate-500">Registro de acciones: quién hizo qué y cuándo (trazabilidad ISO 9001).</p>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-3">
