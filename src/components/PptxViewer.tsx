@@ -12,10 +12,11 @@ export function PptxViewer({ src }: { src: string }) {
   useEffect(() => {
     let cancel = false;
     let previewer: { destroy?: () => void } | null = null;
+    const ac = new AbortController();
 
     (async () => {
       try {
-        const res = await fetch(src);
+        const res = await fetch(src, { signal: ac.signal });
         if (!res.ok) throw new Error("fetch");
         const buf = await res.arrayBuffer();
 
@@ -30,13 +31,16 @@ export function PptxViewer({ src }: { src: string }) {
         });
         await (previewer as any).preview(buf);
         if (!cancel) setCargando(false);
-      } catch {
-        if (!cancel) { setError("No se pudo generar la vista previa de esta presentación."); setCargando(false); }
+      } catch (e) {
+        if (!cancel && (e as any)?.name !== "AbortError") {
+          setError("No se pudo generar la vista previa de esta presentación."); setCargando(false);
+        }
       }
     })();
 
     return () => {
       cancel = true;
+      ac.abort();
       try { previewer?.destroy?.(); } catch { /* noop */ }
     };
   }, [src]);

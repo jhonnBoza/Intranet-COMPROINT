@@ -12,6 +12,8 @@ interface Props {
   onCreado: (doc: Documento) => void;
   /** Archivos que vienen de un arrastre sobre la página. */
   archivosIniciales?: File[];
+  /** Sub-área (carpeta) activa desde la que se abrió el modal. */
+  subareaInicial?: string;
 }
 
 const CATEGORIAS = ["Procedimiento", "Formato", "Manual", "Registro", "Plano", "Reporte"] as const;
@@ -74,12 +76,18 @@ function recorrerEntrada(entry: any, prefijo: string, salida: { file: File; ruta
   });
 }
 
-export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Props) {
+export function UploadModal({ area, onCerrar, onCreado, archivosIniciales, subareaInicial }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [categoria, setCategoria] = useState<(typeof CATEGORIAS)[number]>("Procedimiento");
-  const [subarea, setSubarea] = useState(area.subareas[0]?.slug ?? "");
+  // Arranca en la carpeta desde la que se abrió (no la primera alfabética).
+  const subareaValida = area.subareas.some((s) => s.slug === subareaInicial);
+  const [subarea, setSubarea] = useState(
+    subareaValida ? subareaInicial! : area.subareas[0]?.slug ?? "",
+  );
   const [confidencialidad, setConfidencialidad] = useState<Documento["confidencialidad"]>("publico");
+  const [proyecto, setProyecto] = useState("");
+  const [proyectos, setProyectos] = useState<{ slug: string; nombre: string }[]>([]);
   const [soloVista, setSoloVista] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [terminado, setTerminado] = useState(false);
@@ -96,11 +104,21 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
     if (archivosIniciales?.length) {
       agregar(archivosIniciales.map((f) => ({ file: f, ruta: f.name })));
     }
+    fetch("/api/projects").then((r) => r.json())
+      .then((d) => setProyectos(d.proyectos ?? [])).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Cerrar con Escape (salvo en pleno envío).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !subiendo) onCerrar(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subiendo]);
+
   function agregar(nuevos: { file: File; ruta: string }[]) {
-    if (!nuevos.length) return;
+    if (!nuevos.length || subiendo) return; // no tocar la cola en pleno envío
     setError("");
     setTerminado(false);
     setItems((prev) => {
@@ -128,6 +146,7 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
   /** Soltar: soporta archivos sueltos Y carpetas completas. */
   async function alSoltar(e: React.DragEvent) {
     e.preventDefault();
+    e.stopPropagation(); // que el drop del modal no llegue al contenedor de la página
     setDragOver(false);
     const dt = e.dataTransfer;
     // webkitGetAsEntry debe leerse de forma síncrona, antes de cualquier await.
@@ -145,15 +164,6 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
     }
   }
 
-  function leerBase64(f: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(((reader.result as string).split(",")[1]) ?? "");
-      reader.onerror = reject;
-      reader.readAsDataURL(f);
-    });
-  }
-
   function marcar(id: number, cambios: Partial<Item>) {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...cambios } : i)));
   }
@@ -161,7 +171,35 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
   async function subirUno(item: Item) {
     marcar(item.id, { estado: "subiendo", error: undefined });
     try {
-      const contenidoBase64 = await leerBase64(item.file);
+      // 1) Pedir una URL firmada para subir DIRECTO a Storage (sin pasar por
+      //    la función serverless → sin el límite de ~4.5 MB de Vercel).
+      const urlRes = await fetch("/api/documents/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ areaSlug: area.slug }),
+      });
+      if (urlRes.status === 401) {
+        marcar(item.id, { estado: "error", error: "Tu sesión caducó. Vuelve a iniciar sesión." });
+        return;
+      }
+      const urlData = await urlRes.json().catch(() => ({}));
+      if (!urlRes.ok) {
+        marcar(item.id, { estado: "error", error: urlData.error ?? "No se pudo preparar la subida." });
+        return;
+      }
+
+      // 2) Subir el archivo crudo a Supabase.
+      const put = await fetch(urlData.signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": item.file.type || "application/octet-stream" },
+        body: item.file,
+      });
+      if (!put.ok) {
+        marcar(item.id, { estado: "error", error: "Falló la subida del archivo. Reintenta." });
+        return;
+      }
+
+      // 3) Registrar el documento (solo metadata + ruta).
       const res = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -171,15 +209,16 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
           areaSlug: area.slug,
           subareaSlug: subarea,
           confidencialidad,
+          proyectoSlug: proyecto || undefined,
           tamano: formatoTamano(item.file.size),
           soloVista,
-          contenidoBase64,
+          storagePath: urlData.path,
           mime: item.file.type || "application/octet-stream",
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        marcar(item.id, { estado: "error", error: data.error ?? "No se pudo subir." });
+        marcar(item.id, { estado: "error", error: data.error ?? "No se pudo registrar el documento." });
         return;
       }
       marcar(item.id, { estado: "ok" });
@@ -370,13 +409,21 @@ export function UploadModal({ area, onCerrar, onCreado, archivosIniciales }: Pro
             </div>
           </div>
 
-          <Campo label="Nivel de confidencialidad">
-            <select value={confidencialidad} onChange={(e) => setConfidencialidad(e.target.value as any)} className="select" disabled={subiendo}>
-              <option value="publico">Público — toda el área</option>
-              <option value="jefes">Solo jefes</option>
-              <option value="restringido">Restringido — solo gerencia</option>
-            </select>
-          </Campo>
+          <div className="grid grid-cols-2 gap-4">
+            <Campo label="Nivel de confidencialidad">
+              <select value={confidencialidad} onChange={(e) => setConfidencialidad(e.target.value as any)} className="select" disabled={subiendo}>
+                <option value="publico">Público — toda el área</option>
+                <option value="jefes">Solo jefes</option>
+                <option value="restringido">Restringido — solo gerencia</option>
+              </select>
+            </Campo>
+            <Campo label="Proyecto (opcional)">
+              <select value={proyecto} onChange={(e) => setProyecto(e.target.value)} className="select" disabled={subiendo}>
+                <option value="">— Ninguno —</option>
+                {proyectos.map((p) => <option key={p.slug} value={p.slug}>{p.nombre}</option>)}
+              </select>
+            </Campo>
+          </div>
 
           <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
             <input

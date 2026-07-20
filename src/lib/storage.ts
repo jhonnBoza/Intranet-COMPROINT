@@ -61,3 +61,33 @@ export async function urlFirmada(path: string, download?: string): Promise<strin
 export async function borrarArchivo(path: string): Promise<void> {
   await admin().storage.from(BUCKET).remove([path]);
 }
+
+/** Elimina varios archivos en una sola llamada. */
+export async function borrarArchivos(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  await admin().storage.from(BUCKET).remove(paths);
+}
+
+/**
+ * Crea una URL firmada de SUBIDA. El cliente sube el archivo crudo con un PUT
+ * directamente a Supabase, sin pasar por la función serverless (evita el
+ * límite de ~4.5 MB de Vercel; el techo pasa a ser el de Storage, ~50 MB).
+ */
+export async function crearUrlSubida(
+  path: string,
+): Promise<{ path: string; token: string; signedUrl: string } | null> {
+  await asegurarBucket();
+  const { data, error } = await admin().storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return null;
+  return { path, token: data.token, signedUrl: data.signedUrl };
+}
+
+/** Verifica que un objeto exista en el bucket (evita registros sin archivo). */
+export async function existeArchivo(path: string): Promise<boolean> {
+  const barra = path.lastIndexOf("/");
+  const carpeta = barra >= 0 ? path.slice(0, barra) : "";
+  const nombre = barra >= 0 ? path.slice(barra + 1) : path;
+  const { data, error } = await admin().storage.from(BUCKET).list(carpeta, { search: nombre, limit: 100 });
+  if (error || !data) return false;
+  return data.some((o) => o.name === nombre);
+}

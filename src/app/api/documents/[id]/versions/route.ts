@@ -36,14 +36,15 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  if (!body.contenidoBase64) {
+  if (!body.contenidoBase64 && !body.storagePath) {
     return NextResponse.json({ error: "Falta el archivo de la nueva versión." }, { status: 400 });
   }
   const excede = excedeLimiteArchivo(body.contenidoBase64);
   if (excede) return NextResponse.json({ error: excede }, { status: 413 });
   try {
     const doc = await reemplazarArchivo(user, params.id, {
-      contenidoBase64: body.contenidoBase64,
+      storagePath: body.storagePath ?? null,
+      contenidoBase64: body.contenidoBase64 ?? null,
       mime: body.mime ?? null,
       tamano: body.tamano ?? "—",
     });

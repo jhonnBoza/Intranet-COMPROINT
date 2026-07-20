@@ -16,9 +16,10 @@ export function OfficeViewer({ src, kind }: { src: string; kind: "word" | "excel
 
   useEffect(() => {
     let cancel = false;
+    const ac = new AbortController();
     (async () => {
       try {
-        const res = await fetch(src);
+        const res = await fetch(src, { signal: ac.signal });
         if (!res.ok) throw new Error("fetch");
         const buf = await res.arrayBuffer();
 
@@ -37,11 +38,13 @@ export function OfficeViewer({ src, kind }: { src: string; kind: "word" | "excel
           }));
           if (!cancel) { setHojas(hs); setCargando(false); }
         }
-      } catch {
-        if (!cancel) { setError("No se pudo generar la vista previa de este archivo."); setCargando(false); }
+      } catch (e) {
+        if (!cancel && (e as any)?.name !== "AbortError") {
+          setError("No se pudo generar la vista previa de este archivo."); setCargando(false);
+        }
       }
     })();
-    return () => { cancel = true; };
+    return () => { cancel = true; ac.abort(); };
   }, [src, kind]);
 
   if (cargando) {

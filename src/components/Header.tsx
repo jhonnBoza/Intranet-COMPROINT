@@ -57,15 +57,21 @@ export function Header({
   }
 
   useEffect(() => {
-    if (!q.trim()) { setResultados([]); return; }
+    if (!q.trim()) { setResultados([]); setBuscando(false); return; }
     setBuscando(true);
+    const ac = new AbortController();
     const t = setTimeout(async () => {
-      const res = await fetch(`/api/documents?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      setResultados(data.resultados ?? []);
-      setBuscando(false);
+      try {
+        const res = await fetch(`/api/documents?q=${encodeURIComponent(q)}`, { signal: ac.signal });
+        const data = await res.json();
+        setResultados(data.resultados ?? []);
+        setBuscando(false);
+      } catch (e) {
+        if ((e as any)?.name !== "AbortError") setBuscando(false);
+      }
     }, 250);
-    return () => clearTimeout(t);
+    // Cancela el timeout Y el fetch en vuelo para que no llegue una respuesta vieja.
+    return () => { clearTimeout(t); ac.abort(); };
   }, [q]);
 
   useEffect(() => {
@@ -114,7 +120,7 @@ export function Header({
               <p className="px-4 py-3 text-sm text-slate-400">Sin resultados para “{q}”.</p>
             )}
             {resultados.map((d) => (
-              <Link key={d.id} href={`/area/${d.areaSlug}`} onClick={() => setQ("")}
+              <Link key={d.id} href={`/area/${d.areaSlug}?q=${encodeURIComponent(d.nombre)}`} onClick={() => setQ("")}
                 className="flex items-center gap-3 border-b border-slate-100 px-3 py-2.5 last:border-0 hover:bg-slate-50">
                 <FileIcon tipo={d.tipo} size={15} />
                 <span className="truncate text-sm text-slate-700">{d.nombre}</span>

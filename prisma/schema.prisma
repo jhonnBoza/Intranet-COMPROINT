@@ -60,9 +60,14 @@ model Documento {
   storagePath      String? // ruta del archivo en Supabase Storage
   mime             String? // tipo MIME del archivo
   soloVista        Boolean @default(false) // solo vista previa (sin descarga)
+  eliminado        Boolean @default(false) // papelera (borrado lógico, reversible)
+  eliminadoEn      String? // ISO de cuándo se envió a la papelera
+  eliminadoPor     String? // nombre de quien lo eliminó
 
-  @@index([areaSlug])
+  @@index([areaSlug, fechaSubida])
+  @@index([areaSlug, subareaSlug])
   @@index([proyectoSlug])
+  @@index([eliminado])
 }
 
 model Proyecto {
@@ -121,5 +126,6 @@ model Notificacion {
   fecha     String
   leida     Boolean @default(false)
 
-  @@index([usuarioId])
+  @@index([usuarioId, leida])
+  @@index([usuarioId, fecha])
 }

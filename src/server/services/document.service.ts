@@ -1,26 +1,36 @@
 import { prisma } from "@/lib/db";
 import {
-  documentosVisibles,
   puedeSubir,
   puedeVerDocumento,
   puedeEditarDocumento,
   puedeEliminarDocumento,
+  puedeGestionarUsuarios,
+  esGlobal,
+  nivelesVisibles,
 } from "@/lib/permissions";
 import { randomUUID } from "crypto";
-import { subirArchivo, urlFirmada, borrarArchivo, descargarArchivo } from "@/lib/storage";
+import {
+  subirArchivo,
+  urlFirmada,
+  borrarArchivos,
+  descargarArchivo,
+  crearUrlSubida,
+  existeArchivo,
+} from "@/lib/storage";
 import type { Documento, UsuarioPublico, TipoArchivo, EstadoDocumento, Confidencialidad } from "@/types";
 
 // ============================================================
 //  SERVICIO DE DOCUMENTOS — capa de negocio (Prisma / Supabase).
-//  Los controladores llaman aquí; aquí se aplican permisos y
-//  reglas. Los datos viven en la base real.
+//  La visibilidad por permisos se empuja a SQL (no se trae toda
+//  la tabla a memoria) y el borrado es lógico (papelera reversible).
 // ============================================================
 
 const asDocs = (rows: unknown): Documento[] => rows as Documento[];
 
-/** Quita campos internos (storagePath, mime) antes de exponer al cliente. */
+/** Quita campos internos antes de exponer al cliente. */
 function limpiar(doc: unknown): Documento {
-  const { storagePath, mime, ...pub } = doc as Record<string, unknown>;
+  const { storagePath, mime, eliminado, eliminadoEn, eliminadoPor, ...pub } =
+    doc as Record<string, unknown>;
   return pub as unknown as Documento;
 }
 const limpiarLista = (docs: Documento[]): Documento[] => docs.map(limpiar);
@@ -30,9 +40,13 @@ function nuevoId(prefijo: string): string {
   return `${prefijo}-${randomUUID().slice(0, 12)}`;
 }
 
-/** Todos los documentos (sin filtrar por permiso). */
-async function todos(): Promise<Documento[]> {
-  return asDocs(await prisma.documento.findMany());
+/** Filtro de visibilidad en SQL (excluye lo que el usuario no puede ver). */
+function whereVisible(user: UsuarioPublico): Record<string, unknown> {
+  if (esGlobal(user)) return {};
+  return {
+    areaSlug: user.areaSlug ?? "__sin_area__",
+    confidencialidad: { in: nivelesVisibles(user) },
+  };
 }
 
 export interface FiltrosDocumento {
@@ -42,60 +56,75 @@ export interface FiltrosDocumento {
   busqueda?: string;
 }
 
-/** Lista los documentos de un área que el usuario puede ver, con filtros. */
+/** Lista los documentos de un área que el usuario puede ver, con filtros (todo en SQL). */
 export async function listarDocumentosDeArea(
   user: UsuarioPublico,
   areaSlug: string,
   filtros: FiltrosDocumento = {},
 ): Promise<Documento[]> {
-  const rows = asDocs(await prisma.documento.findMany({ where: { areaSlug } }));
-  let docs = documentosVisibles(user, rows); // ← permisos primero
+  // Un usuario no-global solo ve su propia área.
+  if (!esGlobal(user) && user.areaSlug !== areaSlug) return [];
 
-  if (filtros.categoria && filtros.categoria !== "todos") {
-    docs = docs.filter((d) => d.categoria === filtros.categoria);
-  }
-  if (filtros.subareaSlug && filtros.subareaSlug !== "todos") {
-    docs = docs.filter((d) => d.subareaSlug === filtros.subareaSlug);
-  }
-  if (filtros.estado && filtros.estado !== "todos") {
-    docs = docs.filter((d) => d.estado === filtros.estado);
-  }
-  if (filtros.busqueda) {
-    const q = filtros.busqueda.toLowerCase();
-    docs = docs.filter((d) => d.nombre.toLowerCase().includes(q));
-  }
+  const where: Record<string, unknown> = { areaSlug, eliminado: false };
+  if (!esGlobal(user)) where.confidencialidad = { in: nivelesVisibles(user) };
+  if (filtros.categoria && filtros.categoria !== "todos") where.categoria = filtros.categoria;
+  if (filtros.subareaSlug && filtros.subareaSlug !== "todos") where.subareaSlug = filtros.subareaSlug;
+  if (filtros.estado && filtros.estado !== "todos") where.estado = filtros.estado;
 
-  return limpiarLista(docs.sort((a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida)));
+  const rows = asDocs(
+    await prisma.documento.findMany({ where, orderBy: { fechaSubida: "desc" } }),
+  );
+  return limpiarLista(rows);
 }
 
-/** Todos los documentos visibles para el usuario (para dashboard/conteos). */
-export async function documentosVisiblesTodos(user: UsuarioPublico): Promise<Documento[]> {
-  return documentosVisibles(user, await todos());
+/** Conteos de documentos visibles para los KPIs del panel (sin traer filas). */
+export async function contarDocumentos(
+  user: UsuarioPublico,
+): Promise<{ total: number; enRevision: number; obsoletos: number }> {
+  const base = { ...whereVisible(user), eliminado: false };
+  const [total, enRevision, obsoletos] = await Promise.all([
+    prisma.documento.count({ where: base }),
+    prisma.documento.count({ where: { ...base, estado: "revision" } }),
+    prisma.documento.count({ where: { ...base, estado: "obsoleto" } }),
+  ]);
+  return { total, enRevision, obsoletos };
 }
 
-/** Documentos recientes visibles para el dashboard. */
+/** Documentos recientes visibles para el dashboard (orden y límite en SQL). */
 export async function documentosRecientes(
   user: UsuarioPublico,
   limite = 6,
 ): Promise<Documento[]> {
-  return documentosVisibles(user, await todos())
-    .sort((a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida))
-    .slice(0, limite);
+  const rows = asDocs(
+    await prisma.documento.findMany({
+      where: { ...whereVisible(user), eliminado: false },
+      orderBy: { fechaSubida: "desc" },
+      take: limite,
+    }),
+  );
+  return limpiarLista(rows);
 }
 
-/** Búsqueda global (barra superior). Busca en nombre, autor y categoría. */
+/** Búsqueda global (barra superior). Busca en nombre, autor y categoría, en SQL. */
 export async function buscarGlobal(
   user: UsuarioPublico,
   query: string,
 ): Promise<Documento[]> {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (!q) return [];
-  return documentosVisibles(user, await todos())
-    .filter((d) =>
-      `${d.nombre} ${d.autor} ${d.categoria}`.toLowerCase().includes(q),
-    )
-    .slice(0, 10)
-    .map(limpiar);
+  const contains = { contains: q, mode: "insensitive" as const };
+  const rows = asDocs(
+    await prisma.documento.findMany({
+      where: {
+        ...whereVisible(user),
+        eliminado: false,
+        OR: [{ nombre: contains }, { autor: contains }, { categoria: contains }],
+      },
+      orderBy: { fechaSubida: "desc" },
+      take: 10,
+    }),
+  );
+  return limpiarLista(rows);
 }
 
 /** Documentos de un proyecto (de todas las áreas) que el usuario puede ver. */
@@ -103,12 +132,41 @@ export async function listarDocumentosDeProyecto(
   user: UsuarioPublico,
   proyectoSlug: string,
 ): Promise<Documento[]> {
-  const rows = asDocs(await prisma.documento.findMany({ where: { proyectoSlug } }));
-  return limpiarLista(
-    documentosVisibles(user, rows).sort(
-      (a, b) => +new Date(b.fechaSubida) - +new Date(a.fechaSubida),
-    ),
+  const rows = asDocs(
+    await prisma.documento.findMany({
+      where: { ...whereVisible(user), proyectoSlug, eliminado: false },
+      orderBy: { fechaSubida: "desc" },
+    }),
   );
+  return limpiarLista(rows);
+}
+
+/** Conteo de documentos visibles por área (para el panel, sin traer filas). */
+export async function contarDocumentosPorArea(
+  user: UsuarioPublico,
+): Promise<Record<string, number>> {
+  const grupos = await prisma.documento.groupBy({
+    by: ["areaSlug"],
+    where: { ...whereVisible(user), eliminado: false },
+    _count: true,
+  });
+  const out: Record<string, number> = {};
+  for (const g of grupos) out[g.areaSlug] = g._count;
+  return out;
+}
+
+/** Conteo de documentos visibles por proyecto (para el índice de proyectos, sin N+1). */
+export async function contarDocumentosPorProyecto(
+  user: UsuarioPublico,
+): Promise<Record<string, number>> {
+  const grupos = await prisma.documento.groupBy({
+    by: ["proyectoSlug"],
+    where: { ...whereVisible(user), eliminado: false, proyectoSlug: { not: null } },
+    _count: true,
+  });
+  const out: Record<string, number> = {};
+  for (const g of grupos) if (g.proyectoSlug) out[g.proyectoSlug] = g._count;
+  return out;
 }
 
 export interface NuevoDocumento {
@@ -120,12 +178,13 @@ export interface NuevoDocumento {
   confidencialidad: Documento["confidencialidad"];
   tamano: string;
   proyectoSlug?: string | null;
-  contenidoBase64?: string | null; // contenido del archivo
+  storagePath?: string | null;       // subida directa (ya subido por el cliente)
+  contenidoBase64?: string | null;   // subida legacy (archivos pequeños)
   mime?: string | null;
   soloVista?: boolean;
 }
 
-/** Registra un documento nuevo (valida permiso de subida). */
+/** Registra un documento nuevo (valida permiso de subida y confidencialidad). */
 export async function crearDocumento(
   user: UsuarioPublico,
   data: NuevoDocumento,
@@ -133,48 +192,78 @@ export async function crearDocumento(
   if (!puedeSubir(user, data.areaSlug)) {
     throw new Error("No tiene permiso para subir documentos a esta área.");
   }
+  // No se puede subir con un nivel de confidencialidad que uno mismo no vería.
+  if (!nivelesVisibles(user).includes(data.confidencialidad)) {
+    throw new Error("No puede asignar un nivel de confidencialidad superior al suyo.");
+  }
+
   const id = nuevoId("d");
   const mime = data.mime || "application/octet-stream";
-
-  // Sube el archivo a Supabase Storage (si vino contenido).
   let storagePath: string | null = null;
-  if (data.contenidoBase64) {
+
+  if (data.storagePath) {
+    // Subida directa: el archivo ya está en Storage; verificamos que exista.
+    if (!(await existeArchivo(data.storagePath))) {
+      throw new Error("El archivo no se subió correctamente. Vuelve a intentarlo.");
+    }
+    storagePath = data.storagePath;
+  } else if (data.contenidoBase64) {
+    // Subida legacy (archivos pequeños): subimos aquí.
     storagePath = `${data.areaSlug}/${id}`;
     await subirArchivo(storagePath, Buffer.from(data.contenidoBase64, "base64"), mime);
   }
 
-  const doc = await prisma.documento.create({
-    data: {
-      id,
-      nombre: data.nombre,
-      tipo: data.tipo,
-      categoria: data.categoria,
-      areaSlug: data.areaSlug,
-      subareaSlug: data.subareaSlug,
-      fechaSubida: new Date().toISOString(),
-      autor: user.nombre,
-      estado: "revision", // todo documento nuevo entra en revisión
-      confidencialidad: data.confidencialidad,
-      version: "1.0",
-      tamano: data.tamano || "—",
-      proyectoSlug: data.proyectoSlug ?? null,
-      storagePath,
-      mime: storagePath ? mime : null,
-      soloVista: !!data.soloVista,
-    },
-  });
-
-  return limpiar(doc);
+  try {
+    const doc = await prisma.documento.create({
+      data: {
+        id,
+        nombre: data.nombre,
+        tipo: data.tipo,
+        categoria: data.categoria,
+        areaSlug: data.areaSlug,
+        subareaSlug: data.subareaSlug,
+        fechaSubida: new Date().toISOString(),
+        autor: user.nombre,
+        estado: "revision",
+        confidencialidad: data.confidencialidad,
+        version: "1.0",
+        tamano: data.tamano || "—",
+        proyectoSlug: data.proyectoSlug ?? null,
+        storagePath,
+        mime: storagePath ? mime : null,
+        soloVista: !!data.soloVista,
+      },
+    });
+    return limpiar(doc);
+  } catch (e) {
+    // Si el insert falla, no dejamos el archivo huérfano en Storage.
+    if (storagePath) {
+      try { await borrarArchivos([storagePath]); } catch { /* limpieza best-effort */ }
+    }
+    throw e;
+  }
 }
 
-type DocConArchivo = Documento & { storagePath?: string | null; mime?: string | null; soloVista?: boolean };
+type DocConArchivo = Documento & {
+  storagePath?: string | null;
+  mime?: string | null;
+  soloVista?: boolean;
+  eliminado?: boolean;
+};
+
+/** Busca un documento vivo (no en papelera) por id. */
+async function docVivo(id: string): Promise<DocConArchivo | null> {
+  const doc = (await prisma.documento.findUnique({ where: { id } })) as DocConArchivo | null;
+  if (!doc || doc.eliminado) return null;
+  return doc;
+}
 
 /** URL firmada para DESCARGAR el archivo (bloquea si es "solo vista"). */
 export async function obtenerUrlDescarga(
   user: UsuarioPublico,
   id: string,
 ): Promise<{ url: string; nombre: string; areaSlug: string } | null> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as DocConArchivo | undefined;
+  const doc = await docVivo(id);
   if (!doc) return null;
   if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
   if (doc.soloVista) throw new Error("Este documento es solo de vista previa; no se puede descargar.");
@@ -189,7 +278,7 @@ export async function obtenerArchivoVista(
   user: UsuarioPublico,
   id: string,
 ): Promise<{ buffer: Buffer; mime: string; nombre: string } | null> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as DocConArchivo | undefined;
+  const doc = await docVivo(id);
   if (!doc) return null;
   if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
   if (!doc.storagePath) return null;
@@ -198,95 +287,181 @@ export async function obtenerArchivoVista(
   return { buffer, mime: doc.mime || "application/octet-stream", nombre: doc.nombre };
 }
 
-/** Edita estado y/o confidencialidad de un documento. */
+export interface CambiosDocumento {
+  estado?: EstadoDocumento;
+  confidencialidad?: Confidencialidad;
+  nombre?: string;
+  categoria?: string;
+  subareaSlug?: string | null;
+  proyectoSlug?: string | null;
+}
+
+/** Edita metadatos de un documento (estado, confidencialidad, nombre, carpeta, proyecto). */
 export async function actualizarDocumento(
   user: UsuarioPublico,
   id: string,
-  cambios: { estado?: EstadoDocumento; confidencialidad?: Confidencialidad },
+  cambios: CambiosDocumento,
 ): Promise<Documento> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0];
+  const doc = await docVivo(id);
   if (!doc) throw new Error("Documento no encontrado.");
   if (!puedeEditarDocumento(user, doc)) throw new Error("Sin permiso para editar este documento.");
+
+  if (cambios.confidencialidad && !nivelesVisibles(user).includes(cambios.confidencialidad)) {
+    throw new Error("No puede asignar un nivel de confidencialidad superior al suyo.");
+  }
+
   const actualizado = await prisma.documento.update({
     where: { id },
     data: {
       estado: cambios.estado ?? doc.estado,
       confidencialidad: cambios.confidencialidad ?? doc.confidencialidad,
+      nombre: cambios.nombre?.trim() || doc.nombre,
+      categoria: cambios.categoria ?? doc.categoria,
+      subareaSlug: cambios.subareaSlug !== undefined ? cambios.subareaSlug : doc.subareaSlug,
+      proyectoSlug: cambios.proyectoSlug !== undefined ? cambios.proyectoSlug : doc.proyectoSlug,
     },
   });
   return limpiar(actualizado);
 }
 
-/** Elimina un documento (y su archivo en Storage). Devuelve nombre y área. */
+/** Envía un documento a la PAPELERA (borrado lógico, reversible). */
 export async function eliminarDocumento(
   user: UsuarioPublico,
   id: string,
 ): Promise<{ nombre: string; areaSlug: string }> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as
-    | (Documento & { storagePath?: string | null })
-    | undefined;
+  const doc = await docVivo(id);
   if (!doc) throw new Error("Documento no encontrado.");
   if (!puedeEliminarDocumento(user, doc)) throw new Error("Sin permiso para eliminar este documento.");
-  // Borra el archivo actual y los de todas las versiones anteriores.
-  const versiones = await prisma.documentoVersion.findMany({ where: { documentoId: id }, select: { storagePath: true } });
-  const rutas = [doc.storagePath, ...versiones.map((v) => v.storagePath)].filter(Boolean) as string[];
-  for (const ruta of rutas) {
-    try { await borrarArchivo(ruta); } catch { /* si falla el storage, igual borramos el registro */ }
-  }
-  await prisma.documentoVersion.deleteMany({ where: { documentoId: id } });
-  await prisma.documento.delete({ where: { id } });
+  await prisma.documento.update({
+    where: { id },
+    data: { eliminado: true, eliminadoEn: new Date().toISOString(), eliminadoPor: user.nombre },
+  });
   return { nombre: doc.nombre, areaSlug: doc.areaSlug };
+}
+
+/** Lista la papelera (solo Gerencia). */
+export async function listarPapelera(user: UsuarioPublico): Promise<Documento[]> {
+  if (!puedeGestionarUsuarios(user)) throw new Error("Sin permiso.");
+  const rows = await prisma.documento.findMany({
+    where: { eliminado: true },
+    orderBy: { eliminadoEn: "desc" },
+  });
+  // Conserva eliminadoEn/eliminadoPor (útiles en la papelera), quita storagePath/mime.
+  return rows.map((d) => {
+    const { storagePath, mime, ...pub } = d as Record<string, unknown>;
+    return pub as unknown as Documento;
+  });
+}
+
+/** Restaura un documento de la papelera (solo Gerencia). */
+export async function restaurarDocumento(user: UsuarioPublico, id: string): Promise<void> {
+  if (!puedeGestionarUsuarios(user)) throw new Error("Sin permiso.");
+  await prisma.documento.update({
+    where: { id },
+    data: { eliminado: false, eliminadoEn: null, eliminadoPor: null },
+  });
+}
+
+/** Borra DEFINITIVAMENTE un documento y sus archivos (solo Gerencia). */
+export async function eliminarDefinitivo(
+  user: UsuarioPublico,
+  id: string,
+): Promise<{ nombre: string }> {
+  if (!puedeGestionarUsuarios(user)) throw new Error("Sin permiso.");
+  const doc = (await prisma.documento.findUnique({ where: { id } })) as DocConArchivo | null;
+  if (!doc) throw new Error("Documento no encontrado.");
+  const versiones = await prisma.documentoVersion.findMany({
+    where: { documentoId: id },
+    select: { storagePath: true },
+  });
+  const rutas = [doc.storagePath, ...versiones.map((v) => v.storagePath)].filter(Boolean) as string[];
+  // Primero la BD (en transacción); si algo falla, no perdemos los archivos.
+  await prisma.$transaction([
+    prisma.documentoVersion.deleteMany({ where: { documentoId: id } }),
+    prisma.documento.delete({ where: { id } }),
+  ]);
+  // Ya sin referencias: borramos los archivos (huérfano barato si esto falla).
+  try { await borrarArchivos(rutas); } catch { /* best-effort */ }
+  return { nombre: doc.nombre };
 }
 
 // ============================================================
 //  VERSIONADO — cada reemplazo archiva la versión anterior.
 // ============================================================
 
-/** Sube una nueva versión: archiva la actual y sube la nueva. */
+/** Calcula el siguiente número de versión (mayor+1.0), tolerante a formatos raros. */
+function siguienteVersion(v: string): string {
+  const m = /^(\d+)/.exec(v.trim());
+  const major = m ? parseInt(m[1], 10) : 1;
+  return `${major + 1}.0`;
+}
+
+export interface NuevaVersion {
+  storagePath?: string | null;     // subida directa
+  contenidoBase64?: string | null; // subida legacy
+  mime?: string | null;
+  tamano: string;
+}
+
+/** Sube una nueva versión de forma atómica: archiva la actual y activa la nueva. */
 export async function reemplazarArchivo(
   user: UsuarioPublico,
   id: string,
-  data: { contenidoBase64: string; mime?: string | null; tamano: string },
+  data: NuevaVersion,
 ): Promise<Documento> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as DocConArchivo | undefined;
+  const doc = await docVivo(id);
   if (!doc) throw new Error("Documento no encontrado.");
   if (!puedeEditarDocumento(user, doc)) throw new Error("Sin permiso para editar este documento.");
-  if (!data.contenidoBase64) throw new Error("Falta el archivo de la nueva versión.");
 
   const mime = data.mime || "application/octet-stream";
+  const n = siguienteVersion(doc.version);
+  const nMajor = n.split(".")[0];
+  const nuevoPath = `${doc.areaSlug}/${id}-v${nMajor}-${randomUUID().slice(0, 6)}`;
 
-  // Archiva la versión actual (si tiene archivo).
-  if (doc.storagePath) {
-    await prisma.documentoVersion.create({
-      data: {
-        documentoId: id,
-        version: doc.version,
-        storagePath: doc.storagePath,
-        mime: doc.mime ?? "application/octet-stream",
-        tamano: doc.tamano,
-        autor: doc.autor,
-        fecha: doc.fechaSubida,
-      },
-    });
+  // 1) Colocar el archivo nuevo ANTES de tocar la BD.
+  if (data.storagePath) {
+    if (!(await existeArchivo(data.storagePath))) {
+      throw new Error("El archivo no se subió correctamente. Vuelve a intentarlo.");
+    }
+  } else if (data.contenidoBase64) {
+    await subirArchivo(nuevoPath, Buffer.from(data.contenidoBase64, "base64"), mime);
+  } else {
+    throw new Error("Falta el archivo de la nueva versión.");
   }
+  const rutaNueva = data.storagePath || nuevoPath;
 
-  const n = (parseInt(doc.version, 10) || 1) + 1;
-  const nuevaVersion = `${n}.0`;
-  const nuevoPath = `${doc.areaSlug}/${id}-v${n}`;
-  await subirArchivo(nuevoPath, Buffer.from(data.contenidoBase64, "base64"), mime);
-
-  const actualizado = await prisma.documento.update({
-    where: { id },
-    data: {
-      storagePath: nuevoPath,
-      mime,
-      tamano: data.tamano || doc.tamano,
-      version: nuevaVersion,
-      fechaSubida: new Date().toISOString(),
-      autor: user.nombre,
-    },
-  });
-  return limpiar(actualizado);
+  // 2) En una transacción: archivar la versión anterior + activar la nueva.
+  const ops: any[] = [];
+  if (doc.storagePath) {
+    ops.push(
+      prisma.documentoVersion.create({
+        data: {
+          documentoId: id,
+          version: doc.version,
+          storagePath: doc.storagePath,
+          mime: doc.mime ?? "application/octet-stream",
+          tamano: doc.tamano,
+          autor: doc.autor,
+          fecha: doc.fechaSubida,
+        },
+      }),
+    );
+  }
+  ops.push(
+    prisma.documento.update({
+      where: { id },
+      data: {
+        storagePath: rutaNueva,
+        mime,
+        tamano: data.tamano || doc.tamano,
+        version: n,
+        fechaSubida: new Date().toISOString(),
+        autor: user.nombre,
+      },
+    }),
+  );
+  const res = await prisma.$transaction(ops);
+  return limpiar(res[res.length - 1]);
 }
 
 export interface VersionInfo {
@@ -295,7 +470,7 @@ export interface VersionInfo {
 
 /** Lista el historial de versiones anteriores de un documento. */
 export async function listarVersiones(user: UsuarioPublico, id: string): Promise<VersionInfo[]> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0];
+  const doc = await docVivo(id);
   if (!doc) return [];
   if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
   const versiones = await prisma.documentoVersion.findMany({
@@ -311,11 +486,29 @@ export async function obtenerUrlVersion(
   id: string,
   versionId: string,
 ): Promise<string | null> {
-  const doc = asDocs(await prisma.documento.findMany({ where: { id } }))[0] as DocConArchivo | undefined;
+  const doc = await docVivo(id);
   if (!doc) return null;
   if (!puedeVerDocumento(user, doc)) throw new Error("Sin permiso para ver este documento.");
   if (doc.soloVista) throw new Error("Este documento es solo de vista previa; no se puede descargar.");
   const v = await prisma.documentoVersion.findUnique({ where: { id: versionId } });
   if (!v || v.documentoId !== id) return null;
   return urlFirmada(v.storagePath, `${doc.nombre} (v${v.version})`);
+}
+
+// ============================================================
+//  Subida directa a Storage — URL firmada para el cliente.
+// ============================================================
+
+/** Devuelve una URL firmada para que el cliente suba el archivo directo a Storage. */
+export async function urlSubidaDirecta(
+  user: UsuarioPublico,
+  areaSlug: string,
+): Promise<{ path: string; token: string; signedUrl: string }> {
+  if (!puedeSubir(user, areaSlug)) {
+    throw new Error("No tiene permiso para subir documentos a esta área.");
+  }
+  const path = `${areaSlug}/${nuevoId("f")}`;
+  const res = await crearUrlSubida(path);
+  if (!res) throw new Error("No se pudo preparar la subida. Intenta de nuevo.");
+  return res;
 }

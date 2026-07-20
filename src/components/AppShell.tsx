@@ -38,9 +38,8 @@ function Footer() {
       <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-4 text-2xs text-slate-400 sm:flex-row sm:items-center sm:justify-between lg:px-8">
         <p>© 2026 COMPROINT S.A. · Sistema de Gestión Documental · Uso interno exclusivo</p>
         <div className="flex items-center gap-4">
-          <a href="#" className="hover:text-brand-700">Mesa de ayuda</a>
-          <a href="#" className="hover:text-brand-700">Directorio</a>
-          <a href="#" className="hover:text-brand-700">Manual de usuario</a>
+          <a href="mailto:soporte.ti@comproint.com" className="hover:text-brand-700">Soporte TI</a>
+          <span className="text-slate-400">Anexo 100</span>
         </div>
       </div>
     </footer>

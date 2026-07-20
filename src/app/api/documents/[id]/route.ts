@@ -25,12 +25,25 @@ export async function GET(req: Request, { params }: Ctx) {
         return NextResponse.json({ error: "Este documento no tiene un archivo cargado." }, { status: 404 });
       }
       await auditar(user, { accion: "vio", entidad: "documento", detalle: archivo.nombre });
+      // Nunca confiamos en el mime almacenado (podría ser text/html y ejecutar
+      // script en nuestro origen). Solo dejamos pasar tipos seguros; el resto
+      // se sirve como binario y con CSP sandbox como red de seguridad.
+      const MIMES_SEGUROS = new Set([
+        "application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp",
+        "text/plain", "application/zip",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ]);
+      const tipoSeguro = MIMES_SEGUROS.has(archivo.mime) ? archivo.mime : "application/octet-stream";
       return new NextResponse(archivo.buffer as unknown as BodyInit, {
         status: 200,
         headers: {
-          "Content-Type": archivo.mime,
+          "Content-Type": tipoSeguro,
           "Content-Disposition": `inline; filename="${encodeURIComponent(archivo.nombre)}"`,
           "Cache-Control": "private, max-age=60",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:",
         },
       });
     }
@@ -58,10 +71,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!validacion.ok) {
     return NextResponse.json({ error: validacion.error }, { status: 400 });
   }
-  const { estado, confidencialidad } = validacion.data;
-
   try {
-    const doc = await actualizarDocumento(user, params.id, { estado, confidencialidad });
+    const doc = await actualizarDocumento(user, params.id, validacion.data);
     await auditar(user, { accion: "editó", entidad: "documento", detalle: doc.nombre, areaSlug: doc.areaSlug });
     return NextResponse.json({ documento: doc });
   } catch (e) {

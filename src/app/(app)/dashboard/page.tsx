@@ -6,7 +6,7 @@ import {
 import { getUsuarioActual } from "@/lib/session";
 import { AREAS } from "@/server/data/areas";
 import { areasVisibles, puedePublicarAnuncios } from "@/lib/permissions";
-import { documentosRecientes, documentosVisiblesTodos } from "@/server/services/document.service";
+import { documentosRecientes, contarDocumentos, contarDocumentosPorArea } from "@/server/services/document.service";
 import { listarAnuncios } from "@/server/services/announcement.service";
 import { FileIcon } from "@/components/FileIcon";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -21,15 +21,15 @@ export default async function DashboardPage() {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
   const areas = areasVisibles(user, AREAS);
-  const [visibles, recientes, anuncios] = await Promise.all([
-    documentosVisiblesTodos(user),
+  const [conteos, porArea, recientes, anuncios] = await Promise.all([
+    contarDocumentos(user),
+    contarDocumentosPorArea(user),
     documentosRecientes(user, 6),
     listarAnuncios(),
   ]);
 
-  const enRevision = visibles.filter((d) => d.estado === "revision").length;
-  const obsoletos = visibles.filter((d) => d.estado === "obsoleto").length;
-  const contar = (slug: string) => visibles.filter((d) => d.areaSlug === slug).length;
+  const { total, enRevision, obsoletos } = conteos;
+  const contar = (slug: string) => porArea[slug] ?? 0;
 
   return (
     <div className="space-y-8">
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
       {/* KPIs — barra de métricas sobria */}
       <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 bg-white sm:grid-cols-4 sm:divide-y-0">
         <Kpi label="Áreas con acceso" valor={areas.length} />
-        <Kpi label="Documentos accesibles" valor={visibles.length} destacado />
+        <Kpi label="Documentos accesibles" valor={total} destacado />
         <Kpi label="En revisión" valor={enRevision} sufijo={enRevision > 0 ? "revision" : undefined} />
         <Kpi label="Obsoletos" valor={obsoletos} sufijo={obsoletos > 0 ? "obsoleto" : undefined} />
       </div>

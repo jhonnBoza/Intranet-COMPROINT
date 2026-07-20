@@ -20,9 +20,10 @@ export function ZipViewer({ src, nombre }: { src: string; nombre: string }) {
 
   useEffect(() => {
     let cancel = false;
+    const ac = new AbortController();
     (async () => {
       try {
-        const res = await fetch(src);
+        const res = await fetch(src, { signal: ac.signal });
         if (!res.ok) throw new Error("fetch");
         const buf = await res.arrayBuffer();
         const JSZip = (await import("jszip")).default;
@@ -34,11 +35,13 @@ export function ZipViewer({ src, nombre }: { src: string; nombre: string }) {
         }));
         list.sort((a, b) => a.nombre.localeCompare(b.nombre));
         if (!cancel) { setEntradas(list); setCargando(false); }
-      } catch {
-        if (!cancel) { setError("No se pudo leer el contenido (¿es .rar o .7z? solo se puede ver dentro de .zip)."); setCargando(false); }
+      } catch (e) {
+        if (!cancel && (e as any)?.name !== "AbortError") {
+          setError("No se pudo leer el contenido (¿es .rar o .7z? solo se puede ver dentro de .zip)."); setCargando(false);
+        }
       }
     })();
-    return () => { cancel = true; };
+    return () => { cancel = true; ac.abort(); };
   }, [src]);
 
   if (cargando) {

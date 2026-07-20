@@ -10,7 +10,7 @@ import { FileIcon, etiquetaTipo } from "./FileIcon";
 import { StatusBadge, ConfidentialityBadge } from "./StatusBadge";
 import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
-import { formatoFecha } from "@/lib/format";
+import { formatoFecha, norm } from "@/lib/format";
 
 const NOMBRE_AREA: Record<string, string> = Object.fromEntries(AREAS.map((a) => [a.slug, a.nombre]));
 
@@ -64,16 +64,22 @@ export function ProjectRepository({
   }, [docs]);
 
   const filtrados = useMemo(() => {
+    const nq = norm(q);
     return docs.filter((d) => {
       if (area !== "todos" && d.areaSlug !== area) return false;
       if (estado !== "todos" && d.estado !== estado) return false;
-      if (q && !d.nombre.toLowerCase().includes(q.toLowerCase())) return false;
+      if (nq && !norm(d.nombre).includes(nq)) return false;
       return true;
     });
   }, [docs, area, estado, q]);
 
   // Reinicia a la primera página cuando cambian los filtros o la búsqueda.
   useEffect(() => { setPage(1); }, [q, area, estado]);
+
+  // Si el filtro de área apunta a una que ya no está presente, vuelve a "todos".
+  useEffect(() => {
+    if (area !== "todos" && !areasPresentes.some((a) => a.v === area)) setArea("todos");
+  }, [areasPresentes, area]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
   const paginaActual = Math.min(page, totalPaginas);

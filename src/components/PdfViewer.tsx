@@ -11,6 +11,8 @@ export function PdfViewer({ src }: { src: string }) {
 
   useEffect(() => {
     let cancelado = false;
+    let loadingTask: any = null;
+    let pdf: any = null;
 
     (async () => {
       try {
@@ -18,7 +20,8 @@ export function PdfViewer({ src }: { src: string }) {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-        const pdf = await pdfjs.getDocument({ url: src, withCredentials: true }).promise;
+        loadingTask = pdfjs.getDocument({ url: src, withCredentials: true });
+        pdf = await loadingTask.promise;
         if (cancelado) return;
 
         const cont = contRef.current;
@@ -37,6 +40,7 @@ export function PdfViewer({ src }: { src: string }) {
           if (!ctx) continue;
           cont.appendChild(canvas);
           await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+          page.cleanup();
         }
         if (!cancelado) setCargando(false);
       } catch {
@@ -44,7 +48,17 @@ export function PdfViewer({ src }: { src: string }) {
       }
     })();
 
-    return () => { cancelado = true; };
+    // Al cerrar: liberamos el documento, el worker y los canvas (evita fugas).
+    return () => {
+      cancelado = true;
+      const cont = contRef.current;
+      if (cont) {
+        cont.querySelectorAll("canvas").forEach((c) => { c.width = 0; c.height = 0; });
+        cont.innerHTML = "";
+      }
+      try { pdf?.destroy?.(); } catch { /* ignore */ }
+      try { loadingTask?.destroy?.(); } catch { /* ignore */ }
+    };
   }, [src]);
 
   return (

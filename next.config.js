@@ -19,6 +19,24 @@ const nextConfig = {
         key: "Strict-Transport-Security",
         value: "max-age=31536000; includeSubDomains",
       },
+      {
+        // 'unsafe-inline' en script-src es necesario para Next 14 sin nonces;
+        // aun así corta la exfiltración (connect-src) y bloquea object/base.
+        key: "Content-Security-Policy",
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: blob:",
+          "font-src 'self' data:",
+          "connect-src 'self' https://*.supabase.co",
+          "worker-src 'self' blob:",
+          "object-src 'none'",
+          "base-uri 'none'",
+          "frame-ancestors 'self'",
+          "form-action 'self'",
+        ].join("; "),
+      },
     ];
     return [{ source: "/:path*", headers: seguridad }];
   },

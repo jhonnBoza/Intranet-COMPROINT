@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Crown, BadgeCheck, Factory, FolderKanban, Truck, Briefcase,
-  LayoutDashboard, ChevronRight, FolderGit2, X, Users, ScrollText, type LucideIcon,
+  LayoutDashboard, ChevronRight, FolderGit2, X, Users, ScrollText, Trash2, type LucideIcon,
 } from "lucide-react";
 import type { Area, UsuarioPublico } from "@/types";
 import { puedeGestionarArea, puedeGestionarUsuarios } from "@/lib/permissions";
@@ -66,6 +66,13 @@ export function Sidebar({ areas, user, abierto, onCerrar }: Props) {
                 activo={pathname.startsWith("/admin/auditoria")}
                 icon={ScrollText}
                 label="Bitácora de auditoría"
+                onNavegar={onCerrar}
+              />
+              <NavLink
+                href="/admin/papelera"
+                activo={pathname.startsWith("/admin/papelera")}
+                icon={Trash2}
+                label="Papelera"
                 onNavegar={onCerrar}
               />
             </>

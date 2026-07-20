@@ -14,7 +14,7 @@ import { UploadModal } from "./UploadModal";
 import { EditDocModal } from "./EditDocModal";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { ModalPortal } from "./ModalPortal";
-import { formatoFecha } from "@/lib/format";
+import { formatoFecha, norm } from "@/lib/format";
 
 const PAGE_SIZE = 12;
 
@@ -29,12 +29,13 @@ const ESTADOS = [
 type SortKey = "nombre" | "fechaSubida" | "estado";
 
 export function AreaRepository({
-  area, user, docsIniciales, subInicial,
+  area, user, docsIniciales, subInicial, qInicial,
 }: {
   area: Area;
   user: UsuarioPublico;
   docsIniciales: Documento[];
   subInicial?: string;
+  qInicial?: string;
 }) {
   const router = useRouter();
   const [docs, setDocs] = useState(docsIniciales);
@@ -47,13 +48,29 @@ export function AreaRepository({
   const [archivosSoltados, setArchivosSoltados] = useState<File[] | undefined>();
 
   async function eliminar(doc: Documento) {
-    if (!confirm(`¿Eliminar "${doc.nombre}"? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Enviar "${doc.nombre}" a la papelera? Gerencia puede restaurarlo.`)) return;
     const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" });
     if (res.ok) {
       setDocs((prev) => prev.filter((d) => d.id !== doc.id));
+      // Quitarlo también de la selección para que el contador no quede descuadrado.
+      setSel((prev) => { const n = new Set(prev); n.delete(doc.id); return n; });
     } else {
       const data = await res.json().catch(() => ({}));
       alert(data.error ?? "No se pudo eliminar.");
+    }
+  }
+
+  // Descarga varios en serie con enlaces temporales (evita el bloqueo de pop-ups).
+  async function descargarSeleccion() {
+    const ids = Array.from(sel);
+    for (const id of ids) {
+      const a = document.createElement("a");
+      a.href = `/api/documents/${id}`;
+      a.download = "";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      await new Promise((r) => setTimeout(r, 350));
     }
   }
 
@@ -61,7 +78,7 @@ export function AreaRepository({
     setDocs((prev) => prev.map((d) => (d.id === doc.id ? doc : d)));
     setEditando(null);
   }
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(qInicial ?? "");
   const [cat, setCat] = useState("todos");
   const [estado, setEstado] = useState("todos");
   const [sub, setSub] = useState(subInicial ?? "todos");
@@ -79,11 +96,12 @@ export function AreaRepository({
   useEffect(() => { setDocs(docsIniciales); setSel(new Set()); }, [docsIniciales]);
 
   const filtrados = useMemo(() => {
+    const nq = norm(q);
     let r = docs.filter((d) => {
       if (cat !== "todos" && d.categoria !== cat) return false;
       if (estado !== "todos" && d.estado !== estado) return false;
       if (sub !== "todos" && d.subareaSlug !== sub) return false;
-      if (q && !d.nombre.toLowerCase().includes(q.toLowerCase())) return false;
+      if (nq && !norm(d.nombre).includes(nq)) return false;
       return true;
     });
     const dir = sortDir === "asc" ? 1 : -1;
@@ -94,8 +112,9 @@ export function AreaRepository({
     return r;
   }, [docs, cat, estado, sub, q, sortKey, sortDir]);
 
-  // Reinicia a la primera página cuando cambian los filtros, la búsqueda o el orden.
-  useEffect(() => { setPage(1); }, [q, cat, estado, sub, sortKey, sortDir]);
+  // Reinicia página Y limpia la selección cuando cambian filtros/búsqueda/orden,
+  // para no actuar nunca sobre documentos que ya no están a la vista.
+  useEffect(() => { setPage(1); setSel(new Set()); }, [q, cat, estado, sub, sortKey, sortDir]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE));
   const paginaActual = Math.min(page, totalPaginas);
@@ -108,8 +127,11 @@ export function AreaRepository({
     else { setSortKey(k); setSortDir("asc"); }
   }
 
+  // "Todos" opera sobre los documentos realmente visibles (filtrados), no sobre
+  // un tamaño que podría coincidir por casualidad con otra selección vieja.
+  const todosMarcados = filtrados.length > 0 && filtrados.every((d) => sel.has(d.id));
   function toggleTodos() {
-    setSel((prev) => prev.size === filtrados.length ? new Set() : new Set(filtrados.map((d) => d.id)));
+    setSel(todosMarcados ? new Set() : new Set(filtrados.map((d) => d.id)));
   }
   function toggle(id: string) {
     setSel((prev) => {
@@ -223,7 +245,7 @@ export function AreaRepository({
           <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
             <span className="font-medium">{sel.size} seleccionado{sel.size > 1 ? "s" : ""}</span>
             <button
-              onClick={() => sel.forEach((id) => window.open(`/api/documents/${id}`, "_blank"))}
+              onClick={descargarSeleccion}
               className="inline-flex items-center gap-1 text-slate-700 hover:underline"
             ><Download size={14} /> Descargar</button>
             <button onClick={() => setSel(new Set())} className="ml-auto text-slate-500 hover:underline">Limpiar</button>
@@ -234,7 +256,7 @@ export function AreaRepository({
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-2xs uppercase tracking-wide text-slate-500">
                 <th className="w-10 px-4 py-2.5">
-                  <input type="checkbox" checked={sel.size > 0 && sel.size === filtrados.length} onChange={toggleTodos}
+                  <input type="checkbox" checked={todosMarcados} onChange={toggleTodos}
                     className="h-3.5 w-3.5 rounded border-slate-300 accent-slate-800" />
                 </th>
                 <ThSort label="Nombre del archivo" activo={sortKey === "nombre"} dir={sortDir} onClick={() => ordenarPor("nombre")} />
@@ -302,6 +324,7 @@ export function AreaRepository({
           onCerrar={cerrarSubida}
           onCreado={onCreado}
           archivosIniciales={archivosSoltados}
+          subareaInicial={sub !== "todos" ? sub : undefined}
         />
       )}
 
@@ -314,7 +337,7 @@ export function AreaRepository({
       )}
 
       {editando && (
-        <EditDocModal doc={editando} onCerrar={() => setEditando(null)} onEditado={onEditado} />
+        <EditDocModal doc={editando} subareas={area.subareas} onCerrar={() => setEditando(null)} onEditado={onEditado} />
       )}
 
       {previsualizando && (

@@ -1,5 +1,10 @@
 // Utilidades de formato para la UI.
 
+/** Normaliza texto para buscar/comparar sin acentos ni mayúsculas. */
+export function norm(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
 export function formatoFecha(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("es-PE", {

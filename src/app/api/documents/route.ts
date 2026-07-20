@@ -49,6 +49,7 @@ export async function POST(req: Request) {
   }
   const { nombre, categoria, areaSlug, subareaSlug, confidencialidad, tamano } = validacion.data;
 
+  // La subida directa ya no manda el archivo por aquí; el base64 es solo legacy.
   const excede = excedeLimiteArchivo(validacion.data.contenidoBase64);
   if (excede) return NextResponse.json({ error: excede }, { status: 413 });
 
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
       confidencialidad,
       tamano: tamano ?? "—",
       proyectoSlug: validacion.data.proyectoSlug || null,
+      storagePath: validacion.data.storagePath ?? null,
       contenidoBase64: validacion.data.contenidoBase64 ?? null,
       mime: validacion.data.mime ?? null,
       soloVista: !!validacion.data.soloVista,

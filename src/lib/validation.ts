@@ -66,29 +66,59 @@ export const categoriaDocumentoSchema = z.enum(
 
 // ---- Documentos ----------------------------------------------------------
 
+/**
+ * Extensiones de archivo permitidas. Bloquea .html/.svg/.js/.htm que podrían
+ * ejecutar script si se abren directamente (defensa en profundidad; al servir
+ * también se fuerza un Content-Type seguro).
+ */
+export const EXTENSIONES_OK = /\.(pdf|docx?|xlsx?|pptx?|zip|rar|7z|dwg|png|jpe?g|gif|webp|txt|csv)$/i;
+
+/** Un slug (subárea/proyecto) que acepta "" como null (cuando no hay carpetas). */
+const slugOpcional = z
+  .string()
+  .transform((s) => (s.trim() === "" ? null : s.trim()))
+  .nullish();
+
 /** POST /api/documents — registra un documento nuevo. */
 export const documentoNuevoSchema = z.object({
-  nombre: z.string().min(1, "El nombre es obligatorio"),
+  nombre: z.string().min(1, "El nombre es obligatorio").regex(EXTENSIONES_OK, "Tipo de archivo no permitido."),
   categoria: categoriaDocumentoSchema,
   areaSlug: z.string().min(1, "El área es obligatoria"),
-  subareaSlug: z.string().min(1).nullish(),
+  subareaSlug: slugOpcional,
   confidencialidad: confidencialidadSchema,
   tamano: z.string().nullish(),
-  proyectoSlug: z.string().min(1).nullish(),
-  contenidoBase64: z.string().nullish(),
+  proyectoSlug: slugOpcional,
+  storagePath: z.string().min(1).nullish(),   // subida directa
+  contenidoBase64: z.string().nullish(),        // subida legacy
   mime: z.string().nullish(),
   soloVista: z.boolean().nullish(),
 });
 
-/** PATCH /api/documents/[id] — edita estado y/o confidencialidad. */
+/** POST /api/documents/upload-url — pide una URL firmada de subida directa. */
+export const urlSubidaSchema = z.object({
+  areaSlug: z.string().min(1, "El área es obligatoria"),
+});
+
+/** PATCH /api/documents/[id] — edita metadatos del documento. */
 export const documentoEdicionSchema = z
   .object({
     estado: estadoDocumentoSchema.optional(),
     confidencialidad: confidencialidadSchema.optional(),
+    nombre: z.string().min(1).regex(EXTENSIONES_OK, "Tipo de archivo no permitido.").optional(),
+    categoria: categoriaDocumentoSchema.optional(),
+    subareaSlug: slugOpcional,
+    proyectoSlug: slugOpcional,
   })
-  .refine((d) => d.estado !== undefined || d.confidencialidad !== undefined, {
-    message: "Debes indicar al menos un campo para editar (estado o confidencialidad).",
-  });
+  .refine(
+    (d) =>
+      d.estado !== undefined ||
+      d.confidencialidad !== undefined ||
+      d.nombre !== undefined ||
+      d.categoria !== undefined ||
+      d.subareaSlug !== undefined ||
+      d.proyectoSlug !== undefined,
+    { message: "Debes indicar al menos un campo para editar." },
+  );
 
 // ---- Proyectos -------------------------------------------------------------
 

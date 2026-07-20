@@ -11,7 +11,7 @@ export default async function AreaPage({
   searchParams,
 }: {
   params: { slug: string };
-  searchParams: { sub?: string };
+  searchParams: { sub?: string; q?: string };
 }) {
   const user = (await getUsuarioActual())!;
   const area = getArea(params.slug);
@@ -33,6 +33,7 @@ export default async function AreaPage({
       user={user}
       docsIniciales={docs}
       subInicial={searchParams.sub}
+      qInicial={searchParams.q}
     />
   );
 }

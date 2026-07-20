@@ -82,6 +82,26 @@ export function documentosVisibles(user: U, docs: Documento[]): Documento[] {
   return docs.filter((d) => puedeVerDocumento(user, d));
 }
 
+/** Niveles de confidencialidad que este usuario puede ver. */
+export function nivelesVisibles(user: U): Confidencialidad[] {
+  if (esGlobal(user)) return ["publico", "jefes", "restringido"];
+  if (user.rol === "JEFE_AREA") return ["publico", "jefes"];
+  return ["publico"];
+}
+
+/**
+ * Filtro Prisma equivalente a `puedeVerDocumento`, para empujar la regla de
+ * visibilidad a SQL en vez de traer toda la tabla y filtrar en memoria.
+ * Combínalo con `eliminado: false` en cada consulta.
+ */
+export function wherePrismaVisible(user: U): Record<string, unknown> {
+  if (esGlobal(user)) return {};
+  return {
+    areaSlug: user.areaSlug ?? "__sin_area__",
+    confidencialidad: { in: nivelesVisibles(user) },
+  };
+}
+
 /** ¿Puede EDITAR / aprobar / cambiar estado del documento? */
 export function puedeEditarDocumento(user: U, doc: Documento): boolean {
   if (esGlobal(user)) return true;

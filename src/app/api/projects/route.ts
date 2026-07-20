@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import { getUsuarioActual } from "@/lib/session";
-import { crearProyecto } from "@/server/services/project.service";
+import { crearProyecto, listarProyectos } from "@/server/services/project.service";
 import { auditar } from "@/server/services/audit.service";
 import { validar, proyectoNuevoSchema } from "@/lib/validation";
+
+// GET /api/projects  →  lista los proyectos (para selectores)
+export async function GET() {
+  const user = await getUsuarioActual();
+  if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  return NextResponse.json({ proyectos: await listarProyectos() });
+}
 
 // POST /api/projects  →  crea un proyecto nuevo
 export async function POST(req: Request) {
