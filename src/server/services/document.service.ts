@@ -536,6 +536,32 @@ export async function eliminarDefinitivo(
   return { nombre: doc.nombre };
 }
 
+/** Vacía la papelera: borra DEFINITIVAMENTE todos sus documentos (solo Gerencia). */
+export async function vaciarPapelera(user: UsuarioPublico): Promise<number> {
+  if (!puedeGestionarUsuarios(user)) throw new Error("Sin permiso.");
+  const docs = (await prisma.documento.findMany({
+    where: { eliminado: true },
+    select: { id: true, storagePath: true },
+  })) as { id: string; storagePath: string | null }[];
+  if (docs.length === 0) return 0;
+  const ids = docs.map((d) => d.id);
+  const versiones = await prisma.documentoVersion.findMany({
+    where: { documentoId: { in: ids } },
+    select: { storagePath: true },
+  });
+  const rutas = [
+    ...docs.map((d) => d.storagePath),
+    ...versiones.map((v) => v.storagePath),
+  ].filter(Boolean) as string[];
+  // Primero la BD (transacción); luego los archivos (huérfano barato si falla).
+  await prisma.$transaction([
+    prisma.documentoVersion.deleteMany({ where: { documentoId: { in: ids } } }),
+    prisma.documento.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  try { await borrarArchivos(rutas); } catch { /* best-effort */ }
+  return docs.length;
+}
+
 // ============================================================
 //  VERSIONADO — cada reemplazo archiva la versión anterior.
 // ============================================================

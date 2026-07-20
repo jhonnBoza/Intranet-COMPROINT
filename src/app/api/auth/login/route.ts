@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { autenticar } from "@/server/services/user.service";
 import { firmarSesion } from "@/lib/auth";
 import { COOKIE_SESION } from "@/lib/session";
-import { auditar } from "@/server/services/audit.service";
 import { demasiadosFallos, registrarFallo, limpiarFallos } from "@/lib/ratelimit";
 
 // POST /api/auth/login  →  valida credenciales (hash) y crea sesión firmada
@@ -28,7 +27,8 @@ export async function POST(req: Request) {
   }
   limpiarFallos(clave);
 
-  await auditar(user, { accion: "inició sesión", entidad: "sesión", detalle: user.email });
+  // No auditamos inicios/cierres de sesión: es ruido de alto volumen. Lo que
+  // importa (quién subió/editó/eliminó) sí queda registrado en esas acciones.
   const token = await firmarSesion(user.id);
   const res = NextResponse.json({ user });
   res.cookies.set(COOKIE_SESION, token, {

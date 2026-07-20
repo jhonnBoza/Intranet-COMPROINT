@@ -29,13 +29,34 @@ export function TrashPanel({ documentosIniciales }: { documentosIniciales: DocPa
     else { const d = await res.json().catch(() => ({})); alert(d.error ?? "No se pudo eliminar."); }
   }
 
+  async function vaciar() {
+    if (!confirm(`Vaciar toda la papelera (${docs.length} documento${docs.length !== 1 ? "s" : ""})? Se borran definitivamente los archivos y NO se puede deshacer.`)) return;
+    setOcupado("__all__");
+    const res = await fetch(`/api/trash`, { method: "DELETE" });
+    setOcupado(null);
+    if (res.ok) setDocs([]);
+    else { const d = await res.json().catch(() => ({})); alert(d.error ?? "No se pudo vaciar la papelera."); }
+  }
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Papelera</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Documentos eliminados. Puedes restaurarlos o borrarlos definitivamente.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">Papelera</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Documentos eliminados. Puedes restaurarlos o borrarlos definitivamente.
+          </p>
+        </div>
+        {docs.length > 0 && (
+          <button
+            onClick={vaciar}
+            disabled={ocupado === "__all__"}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-estado-obsoleto hover:bg-red-50 disabled:opacity-50"
+          >
+            {ocupado === "__all__" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            Vaciar papelera
+          </button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -72,14 +93,14 @@ export function TrashPanel({ documentosIniciales }: { documentosIniciales: DocPa
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => restaurar(d.id)}
-                          disabled={ocupado === d.id}
+                          disabled={!!ocupado}
                           className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         >
                           {ocupado === d.id ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />} Restaurar
                         </button>
                         <button
                           onClick={() => eliminarDefinitivo(d.id, d.nombre)}
-                          disabled={ocupado === d.id}
+                          disabled={!!ocupado}
                           className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-estado-obsoleto hover:bg-red-50 disabled:opacity-50"
                         >
                           <Trash2 size={13} /> Borrar

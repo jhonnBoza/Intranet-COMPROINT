@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: Ctx) {
       if (!archivo) {
         return NextResponse.json({ error: "Este documento no tiene un archivo cargado." }, { status: 404 });
       }
-      await auditar(user, { accion: "vio", entidad: "documento", detalle: archivo.nombre });
+      // No auditamos "ver": es ruido de alto volumen que solo consume espacio.
       // Nunca confiamos en el mime almacenado (podría ser text/html y ejecutar
       // script en nuestro origen). Solo dejamos pasar tipos seguros; el resto
       // se sirve como binario y con CSP sandbox como red de seguridad.
@@ -52,7 +52,7 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!dl) {
       return NextResponse.json({ error: "Este documento no tiene un archivo para descargar." }, { status: 404 });
     }
-    await auditar(user, { accion: "descargó", entidad: "documento", detalle: dl.nombre, areaSlug: dl.areaSlug });
+    // No auditamos "descargar": mismo motivo que "ver" — ruido innecesario.
     return NextResponse.redirect(dl.url);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
