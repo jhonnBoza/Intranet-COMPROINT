@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Menu, Search, Bell, LogOut, ChevronDown, LifeBuoy, X } from "lucide-react";
+import { Menu, Search, Bell, LogOut, ChevronDown, X } from "lucide-react";
 import type { UsuarioPublico, Documento } from "@/types";
 import { ETIQUETA_ROL } from "@/lib/permissions";
 import { tiempoRelativo } from "@/lib/format";
 import { FileIcon } from "./FileIcon";
 import { LogoMark } from "./Logo";
+import { HelpPanel } from "./HelpPanel";
 
 interface Notif { id: string; titulo: string; cuerpo: string; url?: string | null; fecha: string; leida: boolean }
 
@@ -176,9 +177,7 @@ export function Header({
       </div>
 
       <div className="ml-auto flex items-center gap-0.5">
-        <button className="hidden h-9 w-9 items-center justify-center rounded-md text-brand-100 hover:bg-white/10 hover:text-white sm:flex" aria-label="Mesa de ayuda">
-          <LifeBuoy size={18} />
-        </button>
+        <HelpPanel />
         <div ref={notiRef} className="relative">
           <button onClick={abrirNotis} className="relative flex h-9 w-9 items-center justify-center rounded-md text-brand-100 hover:bg-white/10 hover:text-white" aria-label="Notificaciones">
             <Bell size={18} />
