@@ -248,14 +248,6 @@ export async function documentosPendientes(user: UsuarioPublico): Promise<Docume
   return limpiarLista(rows);
 }
 
-/** Cuántos documentos hay pendientes de aprobar para este usuario. */
-export async function contarPendientes(user: UsuarioPublico): Promise<number> {
-  if (user.rol === "OPERARIO") return 0;
-  return prisma.documento.count({
-    where: { ...whereVisible(user), estado: "revision", eliminado: false },
-  });
-}
-
 /** Conteo de documentos visibles por área (para el panel, sin traer filas). */
 export async function contarDocumentosPorArea(
   user: UsuarioPublico,
