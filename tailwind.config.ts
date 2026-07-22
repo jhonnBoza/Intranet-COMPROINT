@@ -47,7 +47,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["Inter", "Segoe UI", "Roboto", "system-ui", "sans-serif"],
+        sans: ["var(--font-inter)", "Segoe UI", "Roboto", "system-ui", "sans-serif"],
       },
       fontSize: {
         "2xs": ["0.6875rem", { lineHeight: "1rem" }],
